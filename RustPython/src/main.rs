@@ -1,5 +1,7 @@
 //extern crate eval;
 //use eval::eval::*;
+use std::io::prelude::*;
+use std::fs::File;
 
 struct VirtualMachine {
     consts: Vec<Option<i32>>, // Dynamic typing?
@@ -55,7 +57,14 @@ impl VirtualMachine {
 }
 
 fn main() {
-    // TODO: read this from file
+    // TODO: read this from args
+    let filename = "../test.bytecode";
+
+    let mut f = File::open(filename).unwrap();
+    let mut s = String::new();
+    f.read_to_string(&mut s).unwrap();
+    println!("{}", s);
+
     let input = vec![
         ("LOAD_CONST", Some(2)),
         ("PRINT_ITEM", None),
