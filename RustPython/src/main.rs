@@ -1,7 +1,8 @@
 extern crate eval;
-use eval::eval::exec;
+use eval::eval::*;
 
 fn main() {
     println!("Hello, world!");
-    exec(vec!["LOAD_FAST".to_string(), "FOO".to_string()]);
+    let vm = VirtualMachine::new(vec![]);
+    vm.exec(vec![("LOAD_FAST".to_string(), 2), ("FOO".to_string(), 1)]);
 }
