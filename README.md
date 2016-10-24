@@ -3,4 +3,20 @@ RustPython
 
 A Python interpreter written in Rust
 
-I'm planning to write a Python interpreter in Rust, just opening a repo to keep myself motivated.
+# Installation
+
+```
+pip install byteplay
+```
+
+# Run
+
+Given a python file `test.py`
+
+```
+python compile_code.py test.py > test.bytecode
+
+cd RustPython
+cargo run ../test.bytecode # Not working yet!
+```
+
