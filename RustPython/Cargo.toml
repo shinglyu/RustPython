@@ -1,0 +1,7 @@
+[package]
+name = "rustpython"
+version = "0.1.0"
+authors = ["Shing Lyu <shing.lyu@gmail.com>"]
+
+[dependencies]
+eval = { path="../eval" }
