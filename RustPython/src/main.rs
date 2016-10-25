@@ -21,10 +21,10 @@ impl<'a> VirtualMachine<'a> {
     }
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn exec(&mut self, code: Code) -> Option<i32> {
+    fn exec(&mut self, code: Code<'a>) -> Option<i32> {
         let mut ret = None;
         for op in code.op_codes {
-            // println!("{:?}", op);
+            //println!("Executing: {:?}", op);
             // TODO: convert this to enum?
             match op {
                 ("LOAD_CONST", Some(consti)) => {
@@ -36,6 +36,21 @@ impl<'a> VirtualMachine<'a> {
                     // println!("Loading const at index: {}", consti);
                     self.stack.push(None);
                 },
+                ("STORE_NAME", Some(namei)) => {
+                    // println!("Loading const at index: {}", consti);
+                    self.environment.insert(code.names[namei as usize], self.stack.pop().unwrap());
+                },
+                ("LOAD_NAME", Some(namei)) => {
+                    // println!("Loading const at index: {}", consti);
+                    self.stack.push(self.environment.get(code.names[namei as usize]).unwrap().clone());
+                },
+                ("BINARY_ADD", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v1 + v2));
+                },
+
+
                 ("PRINT_ITEM", None) => {
                     // TODO: Print without the Some(...)
                     match self.stack.pop().unwrap() {
@@ -51,9 +66,10 @@ impl<'a> VirtualMachine<'a> {
                     break;
                 },
                 _ => {
-                    println!("Unrecongnized op code!");
+                    //println!("Unrecongnized op code!");
                 }
             }
+            //println!("Stack: {:?}", self.stack);
         }
         ret
     }
@@ -70,7 +86,6 @@ fn parse_bytecode(s: &str) -> Code {
     let lines: Vec<&str> = s.split('\n').collect();
 
     let (metadata, ops) = lines.split_at(2);
-
     // Parsing the first line CONSTS
     let consts_str: &str = metadata[0]; // line 0 is empty
     let values_str = &consts_str[("CONSTS: (".len())..(consts_str.len()-1)];
@@ -78,13 +93,20 @@ fn parse_bytecode(s: &str) -> Code {
     // We need better type definition here
     let consts: Vec<Option<i32>>= values.into_iter().map(|x| x.parse::<i32>().ok()).collect();
 
+    // Parsing the second line NAMES
+    let names_str: &str = metadata[1]; // line 0 is empty
+    let values_str = &names_str[("NAMES: (".len())..(names_str.len()-1)];
+    let values: Vec<&str> = values_str.split(", ").collect();
+    // We are assuming the first and last chars are \'
+    let names: Vec<&str>= values.into_iter().map(|x| x.trim()).map(|x| &x[1..(x.len()-1)]).collect();
+
     // Parsing the op_codes
     let op_codes: Vec<(&str, Option<i32>)>= ops.into_iter()
                                                .map(|x| x.trim())
                                                .filter(|x| x.len() > 0)
                                                .map(|x| {
                                                    let op: Vec<&str> = x.split(", ").collect();
-                                                   println!("{:?}", op);
+                                                   // println!("{:?}", op);
                                                    (op[0], op[1].parse::<i32>().ok())
                                                }).collect();
     
@@ -92,7 +114,7 @@ fn parse_bytecode(s: &str) -> Code {
     Code {
         consts: consts,
         op_codes: op_codes,
-        names: vec![] // FIXME!
+        names: names,
     }
 
 }
@@ -115,7 +137,7 @@ fn main() {
 fn test_parse_bytecode() {
 
     let input = "CONSTS: (1, None, 2)
-VARNAMES: ()
+NAMES: ('a', 'b')
 SetLineno, 1
 LOAD_CONST, 2
 PRINT_ITEM, None
@@ -125,7 +147,7 @@ RETURN_VALUE, None
         ";
     let expected = Code { // Fill me with a more sensible data
         consts: vec![Some(1), None, Some(2)], 
-        names: vec![],
+        names: vec!["a", "b"],
         op_codes: vec![
             ("SetLineno", Some(1)),
             ("LOAD_CONST", Some(2)),

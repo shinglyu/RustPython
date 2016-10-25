@@ -1,14 +1,15 @@
 # import dis
 import byteplay
+import sys
 # from pprint import pprint
 
-filename = "test.py"
+filename = sys.argv[1]
 with open(filename, 'rU') as f:
     code = f.read()
 
 code = compile(code, filename, "exec")
 print("CONSTS: {0}".format(code.co_consts))
-print("VARNAMES: {0}".format(code.co_varnames))
+print("NAMES: {0}".format(code.co_names))
 # print(code.co_varnames)
 # print(list(bytearray(code.co_code)))
 # for elem in list(bytearray(code.co_code)):
@@ -32,8 +33,7 @@ for op in c.code:
     #   The argument of opcodes in hasfree is the name of the cell or free variable, as a string.
     if op[0] in byteplay.hasconst:
         print("{0}, {1}".format(op[0], code.co_consts.index(op[1])))
+    elif op[0] in byteplay.hasname:
+        print("{0}, {1}".format(op[0], code.co_names.index(op[1])))
     else:
         print("{0}, {1}".format(op[0], op[1]))
-
-
-
