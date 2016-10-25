@@ -1,5 +1,4 @@
-//extern crate eval;
-//use eval::eval::*;
+//extern crate eval; use eval::eval::*;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
@@ -24,7 +23,7 @@ impl<'a> VirtualMachine<'a> {
     fn exec(&mut self, code: Code<'a>) -> Option<i32> {
         let mut ret = None;
         for op in code.op_codes {
-            //println!("Executing: {:?}", op);
+            // println!("Executing: {:?}", op);
             // TODO: convert this to enum?
             match op {
                 ("LOAD_CONST", Some(consti)) => {
@@ -47,10 +46,41 @@ impl<'a> VirtualMachine<'a> {
                 ("BINARY_ADD", None) => {
                     let v1 = self.stack.pop().unwrap().unwrap();
                     let v2 = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v1 + v2));
+                    self.stack.push(Some(v2 + v1));
                 },
-
-
+                ("BINARY_POWER", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v2.pow(v1 as u32)));
+                },
+                ("BINARY_MULTIPLY", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v2 * v1));
+                },
+                ("BINARY_DIVIDE", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v2 / v1));
+                },
+                ("BINARY_MODULO", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v2 % v1));
+                },
+                ("BINARY_SUBTRACT", None) => {
+                    let v1 = self.stack.pop().unwrap().unwrap();
+                    let v2 = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v2 - v1));
+                },
+                ("UNARY_NEGATIVE", None) => {
+                    let v = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(-v));
+                },
+                ("UNARY_POSITIVE", None) => {
+                    let v = self.stack.pop().unwrap().unwrap();
+                    self.stack.push(Some(v));
+                },
                 ("PRINT_ITEM", None) => {
                     // TODO: Print without the Some(...)
                     match self.stack.pop().unwrap() {
@@ -69,7 +99,7 @@ impl<'a> VirtualMachine<'a> {
                     //println!("Unrecongnized op code!");
                 }
             }
-            //println!("Stack: {:?}", self.stack);
+            // println!("Stack: {:?}", self.stack);
         }
         ret
     }
