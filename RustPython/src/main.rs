@@ -1,33 +1,35 @@
 //extern crate eval;
 //use eval::eval::*;
-use std::io::prelude::*;
-use std::fs::File;
+use std::collections::HashMap;
 use std::env;
+use std::fs::File;
+use std::io::prelude::*;
 
-struct VirtualMachine {
-    consts: Vec<Option<i32>>, // Dynamic typing?
+struct VirtualMachine<'a> {
     // TODO: We are using Option<i32> in stack for handline None return value
     // We need 1 stack per frame
     stack: Vec<Option<i32>>, 
+    environment: HashMap<&'a str, Option<i32>>,
 }
 
-impl VirtualMachine {
-    fn new(consts: Vec<Option<i32>>) -> VirtualMachine {
+impl<'a> VirtualMachine<'a> {
+    fn new() -> VirtualMachine<'a> {
         VirtualMachine {
-            consts: consts,
-            stack: vec![]
+            stack: vec![],
+            environment: HashMap::new(),
         }
     }
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
-    fn exec(&mut self, ops: Vec<(&str, Option<i32>)>) -> Option<i32> {
+    // TODO: read the op codes directly from the internal code object
+    fn exec(&mut self, code: Code) -> Option<i32> {
         let mut ret = None;
-        for op in ops {
+        for op in code.op_codes {
             // println!("{:?}", op);
             // TODO: convert this to enum?
             match op {
                 ("LOAD_CONST", Some(consti)) => {
                     // println!("Loading const at index: {}", consti);
-                    self.stack.push(self.consts[consti as usize]);
+                    self.stack.push(code.consts[consti as usize]);
                 },
                 // TODO: universal stack element type
                 ("LOAD_CONST", None) => {
@@ -60,6 +62,7 @@ impl VirtualMachine {
 #[derive(PartialEq, Debug)]
 struct Code<'a> {
     consts: Vec<Option<i32>>,
+    names: Vec<&'a str>,
     op_codes: Vec<(&'a str, Option<i32>)>
 }
 
@@ -89,6 +92,7 @@ fn parse_bytecode(s: &str) -> Code {
     Code {
         consts: consts,
         op_codes: op_codes,
+        names: vec![] // FIXME!
     }
 
 }
@@ -103,8 +107,8 @@ fn main() {
     f.read_to_string(&mut s).unwrap();
     let code = parse_bytecode(&s);
 
-    let mut vm = VirtualMachine::new(code.consts);
-    vm.exec(code.op_codes);
+    let mut vm = VirtualMachine::new();
+    vm.exec(code);
 }
 
 #[test]
@@ -121,13 +125,14 @@ RETURN_VALUE, None
         ";
     let expected = Code { // Fill me with a more sensible data
         consts: vec![Some(1), None, Some(2)], 
+        names: vec![],
         op_codes: vec![
-            ("SetLineno".to_string(), Some(1)),
-            ("LOAD_CONST".to_string(), Some(2)),
-            ("PRINT_ITEM".to_string(), None),
-            ("PRINT_NEWLINE".to_string(), None),
-            ("LOAD_CONST".to_string(), None),
-            ("RETURN_VALUE".to_string(), None)
+            ("SetLineno", Some(1)),
+            ("LOAD_CONST", Some(2)),
+            ("PRINT_ITEM", None),
+            ("PRINT_NEWLINE", None),
+            ("LOAD_CONST", None),
+            ("RETURN_VALUE", None)
         ]
     };
 
@@ -137,14 +142,17 @@ RETURN_VALUE, None
 #[test]
 fn test_vm() {
 
-    let input = vec![
-        ("LOAD_CONST", Some(2)),
-        ("PRINT_ITEM", None),
-        ("PRINT_NEWLINE", None),
-        ("LOAD_CONST", None),
-        ("RETURN_VALUE", None)
-    ];
-
-    let mut vm = VirtualMachine::new(vec![Some(1), None, Some(2)]);
-    assert_eq!(None, vm.exec(input));
+    let code = Code {
+        consts: vec![Some(1), None, Some(2)], 
+        names: vec![],
+        op_codes: vec![
+            ("LOAD_CONST", Some(2)),
+            ("PRINT_ITEM", None),
+            ("PRINT_NEWLINE", None),
+            ("LOAD_CONST", None),
+            ("RETURN_VALUE", None)
+        ]
+    };
+    let mut vm = VirtualMachine::new();
+    assert_eq!(None, vm.exec(code));
 }
