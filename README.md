@@ -22,8 +22,9 @@ cargo run ../test.bytecode
 
 # TODOs
 * Native types
-* Structural types (list, tuple, object)
 * Control flow
+* assert
+* Structural types (list, tuple, object)
 * Strings
 * Function calls
 * Modules import
