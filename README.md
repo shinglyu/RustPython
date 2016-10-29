@@ -20,3 +20,12 @@ cd RustPython
 cargo run ../test.bytecode 
 ```
 
+# TODOs
+* Native types
+* Structural types (list, tuple, object)
+* Control flow
+* Strings
+* Function calls
+* Modules import
+* Generators
+
