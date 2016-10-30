@@ -33,7 +33,7 @@ impl<'a> VirtualMachine<'a> {
     fn exec(&mut self, code: Code<'a>) -> NativeType {
         let mut ret = NativeType::None;
         for op in code.op_codes {
-            println!("Executing: {:?}", op);
+            // println!("Executing: {:?}", op);
             // TODO: convert this to enum?
             match op {
                 ("LOAD_CONST", Some(consti)) => {
@@ -155,7 +155,7 @@ struct Code<'a> {
 }
 
 fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
-    println!("{:?}", val_str);
+    // println!("{:?}", val_str);
     match val_str {
         "None" => Ok(NativeType::None),
         "True" => Ok(NativeType::Boolean(true)),
@@ -231,16 +231,16 @@ fn main() {
     let filename = &args[1];
 
     let mut f = File::open(filename).unwrap();
-    println!("Read file");
+    // println!("Read file");
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
-    println!("Read string");
+    // println!("Read string");
     let code = parse_bytecode(&s);
-    println!("Read code");
+    // println!("Read code");
 
     let mut vm = VirtualMachine::new();
     vm.exec(code);
-    println!("Done");
+    // println!("Done");
 }
 
 #[test]
