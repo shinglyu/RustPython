@@ -33,7 +33,7 @@ impl<'a> VirtualMachine<'a> {
     fn exec(&mut self, code: Code<'a>) -> NativeType {
         let mut ret = NativeType::None;
         for op in code.op_codes {
-            // println!("Executing: {:?}", op);
+            println!("Executing: {:?}", op);
             // TODO: convert this to enum?
             match op {
                 ("LOAD_CONST", Some(consti)) => {
@@ -155,6 +155,7 @@ struct Code<'a> {
 }
 
 fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
+    println!("{:?}", val_str);
     match val_str {
         "None" => Ok(NativeType::None),
         "True" => Ok(NativeType::Boolean(true)),
@@ -189,16 +190,22 @@ fn parse_bytecode(s: &str) -> Code {
     // Parsing the first line CONSTS
     let consts_str: &str = metadata[0]; // line 0 is empty
     let values_str = &consts_str[("CONSTS: (".len())..(consts_str.len()-1)];
-    let values: Vec<&str> = values_str.split(", ").collect();
+    let values: Vec<&str> = values_str.split(",").collect();
     // We need better type definition here
-    let consts: Vec<NativeType>= values.into_iter().map(|x| parse_native_type(x).unwrap()).collect();
+    let consts: Vec<NativeType>= values.into_iter()
+                                       .map(|x| x.trim())
+                                       .filter(|x| x.len() > 0)
+                                       .map(|x| parse_native_type(x).unwrap())
+                                       .collect();
 
     // Parsing the second line NAMES
     let names_str: &str = metadata[1]; // line 0 is empty
     let values_str = &names_str[("NAMES: (".len())..(names_str.len()-1)];
-    let values: Vec<&str> = values_str.split(", ").collect();
+    let values: Vec<&str> = values_str.split(",").collect();
     // We are assuming the first and last chars are \'
-    let names: Vec<&str>= values.into_iter().map(|x| x.trim()).map(|x| &x[1..(x.len()-1)]).collect();
+    let names: Vec<&str>= values.into_iter().map(|x| x.trim())
+                                       .filter(|x| x.len() > 0)
+        .map(|x| &x[1..(x.len()-1)]).collect();
 
     // Parsing the op_codes
     let op_codes: Vec<(&str, Option<usize>)>= ops.into_iter()
@@ -216,7 +223,6 @@ fn parse_bytecode(s: &str) -> Code {
         op_codes: op_codes,
         names: names,
     }
-
 }
 
 fn main() {
@@ -225,12 +231,16 @@ fn main() {
     let filename = &args[1];
 
     let mut f = File::open(filename).unwrap();
+    println!("Read file");
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
+    println!("Read string");
     let code = parse_bytecode(&s);
+    println!("Read code");
 
     let mut vm = VirtualMachine::new();
     vm.exec(code);
+    println!("Done");
 }
 
 #[test]
@@ -267,6 +277,27 @@ RETURN_VALUE, None
             ("PRINT_ITEM", None),
             ("PRINT_NEWLINE", None),
             ("LOAD_CONST", None),
+            ("RETURN_VALUE", None)
+        ]
+    };
+
+    assert_eq!(expected, parse_bytecode(input));
+}
+
+#[test]
+fn test_single_const_tuple() {
+    let input = "CONSTS: (None,)
+NAMES: ()
+SetLineno, 1
+LOAD_CONST, 0
+RETURN_VALUE, None
+";
+    let expected = Code { // Fill me with a more sensible data
+        consts: vec![NativeType::None], 
+        names: vec![],
+        op_codes: vec![
+            ("SetLineno", Some(1)),
+            ("LOAD_CONST", Some(0)),
             ("RETURN_VALUE", None)
         ]
     };
