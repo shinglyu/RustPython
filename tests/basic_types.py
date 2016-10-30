@@ -1,7 +1,7 @@
 # Spec: https://docs.python.org/2/library/types.html
 print(None)
 # TypeType
-print(True)
+# print(True) # LOAD_NAME???
 print(1)
 # print(1L) # Long
 print(1.1)

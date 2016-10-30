@@ -92,41 +92,77 @@ impl<'a> VirtualMachine<'a> {
                         (NativeType::Float(v1f), NativeType::Float(v2f)) => {
                             self.stack.push(NativeType::Float(v2f.powf(v1f)));
                         }
-                        _ => panic!("TypeError in BINARY_ADD")
+                        _ => panic!("TypeError in BINARY_POWER")
                     }
                 },
-                /*
                 ("BINARY_MULTIPLY", None) => {
-                    let v1 = self.stack.pop().unwrap().unwrap();
-                    let v2 = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v2 * v1));
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+                    match (v1, v2) {
+                        (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                            self.stack.push(NativeType::Int(v2i * v1i));
+                        },
+                        /*
+                        (NativeType::Float(v1f), NativeType::Int(v2i)) => {
+                            self.stack.push(NativeType::Float((v2i as f32) * v1f));
+                        },
+                        (NativeType::Int(v1i), NativeType::Float(v2f)) => {
+                            self.stack.push(NativeType::Float(v2f * (v1i as f32)));
+                        },
+                        (NativeType::Float(v1f), NativeType::Float(v2f)) => {
+                            self.stack.push(NativeType::Float(v2f * v1f));
+                        },
+                        */
+                        //TODO: String multiply
+                        _ => panic!("TypeError in BINARY_MULTIPLY")
+                    }
                 },
                 ("BINARY_DIVIDE", None) => {
-                    let v1 = self.stack.pop().unwrap().unwrap();
-                    let v2 = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v2 / v1));
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+                    match (v1, v2) {
+                        (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                            self.stack.push(NativeType::Int(v2i / v1i));
+                        },
+                        _ => panic!("TypeError in BINARY_DIVIDE")
+                    }
                 },
                 ("BINARY_MODULO", None) => {
-                    let v1 = self.stack.pop().unwrap().unwrap();
-                    let v2 = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v2 % v1));
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+                    match (v1, v2) {
+                        (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                            self.stack.push(NativeType::Int(v2i % v1i));
+                        },
+                        _ => panic!("TypeError in BINARY_MODULO")
+                    }
                 },
                 ("BINARY_SUBTRACT", None) => {
-                    let v1 = self.stack.pop().unwrap().unwrap();
-                    let v2 = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v2 - v1));
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+                    match (v1, v2) {
+                        (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                            self.stack.push(NativeType::Int(v2i - v1i));
+                        },
+                        _ => panic!("TypeError in BINARY_SUBSTRACT")
+                    }
                 },
                 ("UNARY_NEGATIVE", None) => {
-                    let v = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(-v));
+                    let v = self.stack.pop().unwrap();
+                    match v {
+                        NativeType::Int(v1i) => {
+                            self.stack.push(NativeType::Int(-v1i));
+                        },
+                        _ => panic!("TypeError in UINARY_NEGATIVE")
+                    }
                 },
                 ("UNARY_POSITIVE", None) => {
-                    let v = self.stack.pop().unwrap().unwrap();
-                    self.stack.push(Some(v));
+                    let v = self.stack.pop().unwrap();
+                    // Any case that is not just push back?
+                    self.stack.push(v);
                 },
-                */
                 ("PRINT_ITEM", None) => {
-                    // TODO: Print without the Some(...)
+                    // TODO: Print without the (...)
                     println!("{:?}", self.stack.pop().unwrap())
                 },
                 ("PRINT_NEWLINE", None) => {
