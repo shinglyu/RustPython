@@ -20,6 +20,9 @@ c = byteplay.Code.from_code(code)
 # pprint(c.code)
 # print(list(c.code))
 
+def format_label(l):
+    return "LABEL, {0}".format(id(l))
+
 for op in c.code:
     # Byteplay print the actual argument instead of the index. But we are
     # Converting them back to the index in case we want to use other bytecode
@@ -35,5 +38,13 @@ for op in c.code:
         print("{0}, {1}".format(op[0], code.co_consts.index(op[1])))
     elif op[0] in byteplay.hasname:
         print("{0}, {1}".format(op[0], code.co_names.index(op[1])))
+    elif op[0] in byteplay.hasjump:
+        print("{0}, {1}".format(op[0], id(op[1])))
+    elif op[0] in byteplay.hascompare:
+        print("{0}, {1}".format(op[0], byteplay.cmp_op.index(op[1])))
+    elif type(op[0]) == byteplay.Label:
+        assert(op[1] == None)
+        print(format_label(op[0])) # Is the second argument always None?
+        # print("{0}, {1}".format(format_label(op[0]), op[1]))
     else:
         print("{0}, {1}".format(op[0], op[1]))

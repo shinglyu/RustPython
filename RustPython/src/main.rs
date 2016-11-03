@@ -14,28 +14,59 @@ enum NativeType {
     Unicode(String),
 }
 
+const CMP_OP: &'static [&'static str] = &[">",
+                                          "<=",
+                                          "==",
+                                          "!=",
+                                          ">",
+                                          ">=",
+                                          "in",
+                                          "not in",
+                                          "is",
+                                          "is not",
+                                          "exception match",
+                                          "BAD"
+                                         ];
+       
+
 struct VirtualMachine<'a> {
     // TODO: We are using Option<i32> in stack for handline None return value
     // We need 1 stack per frame
     stack: Vec<NativeType>, 
     environment: HashMap<&'a str, NativeType>,
-}
+    labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
+    lasti: usize, // Instruction location
+    // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 
+}
 impl<'a> VirtualMachine<'a> {
     fn new() -> VirtualMachine<'a> {
         VirtualMachine {
             stack: vec![],
             environment: HashMap::new(),
+            labels: HashMap::new(),
+            lasti: 0,
         }
     }
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
     fn exec(&mut self, code: Code<'a>) -> NativeType {
         let mut ret = NativeType::None;
-        for op in code.op_codes {
+
+        for (line_no, op) in code.op_codes.iter().enumerate() {
+            if let ("LABEL", Some(id)) = *op {
+                self.labels.insert(id, line_no);
+            }
+        }
+
+        // Change this to a loop for jump
+        while self.lasti < code.op_codes.len() {
+        let op_code = code.op_codes[self.lasti];
+        self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
+        //for op in code.op_codes {
             // println!("Executing: {:?}", op);
             // TODO: convert this to enum?
-            match op {
+            match op_code {
                 ("LOAD_CONST", Some(consti)) => {
                     // println!("Loading const at index: {}", consti);
                     self.stack.push(code.consts[consti].clone());
@@ -53,6 +84,39 @@ impl<'a> VirtualMachine<'a> {
                     // println!("Loading const at index: {}", consti);
                     self.stack.push(self.environment.get(code.names[namei]).unwrap().clone());
                 },
+                ("COMPARE_OP", Some(cmp_op_i)) => {
+                    let v1 = self.stack.pop().unwrap();
+                    let v2 = self.stack.pop().unwrap();
+                    match CMP_OP[cmp_op_i] {
+                        // To avoid branch explotion, use an array of callables instead
+                        "==" => {
+                            match (v1, v2) {
+                                (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                                    self.stack.push(NativeType::Boolean(v2i == v1i));
+                                },
+                                (NativeType::Float(v1f), NativeType::Float(v2f)) => {
+                                    self.stack.push(NativeType::Boolean(v2f == v1f));
+                                },
+                                _ => panic!("TypeError in COMPARE_OP")
+                            };
+                        }
+                        _ => panic!("Unimplemented COMPARE_OP operator")
+
+                    }
+                    
+                },
+                ("POP_JUMP_IF_FALSE", Some(ref label_id)) => {
+                    let v = self.stack.pop().unwrap();
+                    if v == NativeType::Boolean(false) {
+                        self.lasti = self.labels.get(label_id).unwrap().clone();
+                    }
+                    
+                }
+                ("JUMP_FORWARD", Some(ref label_id)) => {
+                    self.lasti = self.labels.get(label_id).unwrap().clone();
+                    
+                }
+
                 ("BINARY_ADD", None) => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
@@ -172,8 +236,11 @@ impl<'a> VirtualMachine<'a> {
                     ret = self.stack.pop().unwrap();
                     break;
                 },
-                _ => {
-                    //println!("Unrecongnized op code!");
+                ("SetLineno", _) | ("LABEL", _)=> {
+                    // Skip
+                }
+                (name, _) => {
+                    println!("Unrecongnizable op code: {}", name);
                 }
             }
             // println!("Stack: {:?}", self.stack);
