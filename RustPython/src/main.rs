@@ -84,6 +84,12 @@ impl<'a> VirtualMachine<'a> {
                     // println!("Loading const at index: {}", consti);
                     self.stack.push(self.environment.get(code.names[namei]).unwrap().clone());
                 },
+                ("LOAD_GLOBAL", Some(namei)) => {
+                    // We need to load the underlying value the name points to, but stuff like
+                    // AssertionError is in the names right after compile, so we load the string
+                    // instead for now
+                    self.stack.push(NativeType::String(code.names[namei].to_string()));
+                },
                 ("COMPARE_OP", Some(cmp_op_i)) => {
                     let v1 = self.stack.pop().unwrap();
                     let v2 = self.stack.pop().unwrap();
@@ -105,6 +111,13 @@ impl<'a> VirtualMachine<'a> {
                     }
                     
                 },
+                ("POP_JUMP_IF_TRUE", Some(ref label_id)) => {
+                    let v = self.stack.pop().unwrap();
+                    if v == NativeType::Boolean(true) {
+                        self.lasti = self.labels.get(label_id).unwrap().clone();
+                    }
+
+                }
                 ("POP_JUMP_IF_FALSE", Some(ref label_id)) => {
                     let v = self.stack.pop().unwrap();
                     if v == NativeType::Boolean(false) {
@@ -115,6 +128,15 @@ impl<'a> VirtualMachine<'a> {
                 ("JUMP_FORWARD", Some(ref label_id)) => {
                     self.lasti = self.labels.get(label_id).unwrap().clone();
                     
+                }
+                ("RAISE_VARARGS", Some(argc)) => {
+                    // let (exception, params, traceback) = match argc {
+                    let exception = match argc {
+                        1 => self.stack.pop().unwrap(),
+                        0 | 2 | 3 => panic!("Not implemented!"),
+                        _ => panic!("Invalid paramter for RAISE_VARARGS, must be between 0 to 3")
+                    };
+                    panic!("{:?}", exception);
                 }
 
                 ("BINARY_ADD", None) => {
