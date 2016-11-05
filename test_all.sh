@@ -1,4 +1,4 @@
-set -e 
+# set -e 
 #TESTCASE=tests/variables.py
 # TESTCASE=tests/variables.py
 #TESTCASE=tests/minimum.py
