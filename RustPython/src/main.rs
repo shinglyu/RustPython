@@ -1,3 +1,6 @@
+#[macro_use]
+extern crate log;
+extern crate env_logger;
 //extern crate eval; use eval::eval::*;
 use std::collections::HashMap;
 use std::env;
@@ -61,7 +64,7 @@ impl<'a> VirtualMachine<'a> {
     /// Handle the block stack after we execute a bytecode, e.g. handle loop break 
     fn manage_block_stack(&mut self, why: &Option<String>) {
         let ref curr_block = self.blocks[self.blocks.len()-1];
-        //println!("{:?}, {:?}", curr_block.block_type, why);
+        debug!("{:?}, {:?}", curr_block.block_type, why);
         match (curr_block.block_type, why.as_ref().map(String::as_ref)) {
             ("loop", Some("break")) => {
                 self.lasti = curr_block.handler; //self.labels[curr_block.handler]; // Jump to the end
@@ -74,8 +77,8 @@ impl<'a> VirtualMachine<'a> {
 
     // Can we get rid of the code paramter?
     fn dispatch(&mut self, op_code: (&str, Option<usize>), code: &Code<'a>) -> Option<String> {
-        //println!("{:?}", op_code);
-        //println!("stack:{:?}", self.stack);
+        debug!("{:?}", op_code);
+        debug!("stack:{:?}", self.stack);
         match op_code {
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
@@ -441,6 +444,7 @@ fn parse_bytecode(s: &str) -> Code {
 }
 
 fn main() {
+    env_logger::init().unwrap();
     // TODO: read this from args
     let args: Vec<String> = env::args().collect();
     let filename = &args[1];
