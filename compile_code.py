@@ -36,6 +36,7 @@ for op in c.code:
     #   The argument of opcodes in hasfree is the name of the cell or free variable, as a string.
     if op[0] in byteplay.hasconst:
         print("{0}, {1}".format(op[0], code.co_consts.index(op[1])))
+        #print("{0}, {1}".format(op[0], None))
     elif op[0] in byteplay.hasname:
         print("{0}, {1}".format(op[0], code.co_names.index(op[1])))
     elif op[0] in byteplay.hasjump:

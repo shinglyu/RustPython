@@ -289,6 +289,13 @@ impl<'a> VirtualMachine<'a> {
                 }
                 None
             },
+            ("ROT_TWO", None) => {
+                let tos = self.stack.pop().unwrap();
+                let tos1 = self.stack.pop().unwrap();
+                self.stack.push(tos);
+                self.stack.push(tos1);
+                None
+            }
             ("UNARY_NEGATIVE", None) => {
                 let v = self.stack.pop().unwrap();
                 match v {
