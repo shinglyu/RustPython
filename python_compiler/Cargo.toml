@@ -5,3 +5,6 @@ authors = ["Shing Lyu <shing.lyu@gmail.com>"]
 
 [dependencies]
 cpython = { git = "https://github.com/dgrunwald/rust-cpython.git" }
+
+[dependencies.python27-sys]
+version = "*"
