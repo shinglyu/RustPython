@@ -6,7 +6,9 @@ A Python interpreter written in Rust
 # Installation
 
 ```
-pip install byteplay
+virtualenv venv --python=python3
+source venv/bin/activate
+pip install bytecode
 ```
 
 # Run
