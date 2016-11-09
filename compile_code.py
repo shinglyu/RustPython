@@ -1,8 +1,24 @@
 # import dis
 import byteplay
 import sys
+import json
+import types
 # from pprint import pprint
 
+class CodeEncoder(json.JSONEncoder):
+    def default(self, obj):
+        #if isinstance(obj, code):
+        print(dir(obj))
+        if (isinstance(obj, types.CodeType)):
+            return (
+                {
+                    "co_consts": obj.co_consts,
+                    "co_names": obj.co_names,
+                    "co_code": parse_co_code_to_str(obj)
+                }
+            )
+        # Let the base class default method raise the TypeError
+        return json.JSONEncoder.default(self, obj)
 
 def parse_co_code_to_str(code):
     c = byteplay.Code.from_code(code)
@@ -46,6 +62,10 @@ def main():
         code = f.read()
 
     code = compile(code, filename, "exec")
+    output = {
+        "co_consts": code.co_consts,
+        "co_names": code.co_names
+    }
     print("CONSTS: {0}".format(code.co_consts))
     print("NAMES: {0}".format(code.co_names))
 # print(code.co_varnames)
@@ -55,6 +75,9 @@ def main():
 # dis_output = dis.dis(code)
 
     parse_co_code_to_str(code)
+    # print(json.dumps(output))
+
+    print(CodeEncoder().encode(code))
 
 if __name__ == "__main__":
     main()
