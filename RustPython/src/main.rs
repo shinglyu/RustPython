@@ -1,13 +1,20 @@
+#![feature(proc_macro)]
+
 #[macro_use]
 extern crate log;
 extern crate env_logger;
+
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
+
 //extern crate eval; use eval::eval::*;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 enum NativeType {
     None,
     Boolean(bool),
@@ -15,6 +22,8 @@ enum NativeType {
     Float(f32),
     String(String),
     Unicode(String),
+    List(Vec<NativeType>),
+    Tuple(Vec<NativeType>),
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -30,6 +39,7 @@ const CMP_OP: &'static [&'static str] = &[">",
                                           "exception match",
                                           "BAD"
                                          ];
+
        
 struct Block<'a> {
     block_type: &'a str,
@@ -402,6 +412,10 @@ fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
                 return Ok(NativeType::Unicode(val_str[2..val_str.len()-1].to_string()))
             }
 
+            if val_str.starts_with("(") && val_str.ends_with(")") {
+                return Ok(NativeType::String(val_str[1..val_str.len()-1].to_string()))
+            }
+
             Err(())
         }
 
@@ -546,5 +560,48 @@ fn test_vm() {
         ]
     };
     let mut vm = VirtualMachine::new();
-    assert_eq!(NativeType::None, vm.exec(code));
+    assert_eq!((), vm.exec(code));
+}
+
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
+struct PyCodeObject {
+    co_consts: Vec<NativeType>,
+    co_names: Vec<String>,
+    co_code: Vec<(String, Option<usize>)>
+}
+
+#[test]
+fn test_parse_jsonbytecode() {
+
+    let input = "{\
+\"co_code\": [\
+    [ \"LOAD_CONST\", 0 ],\
+    [ \"LOAD_CONST\", 0 ],\
+    [ \"POP_TOP\", null ],\
+],\
+\"co_consts\": [ ],\
+\"co_names\": [ \"print\" ] \
+}";
+
+let input = "{\"co_consts\":[{\"Int\":1},\"None\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
+
+let input = "{\"co_consts\"\
+             :[{\"Int\":1},\"None\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
+
+    let expected = PyCodeObject { // Fill me with a more sensible data
+        co_consts: vec![NativeType::Int(1), NativeType::None, NativeType::Int(2)], 
+        co_names: vec!["print".to_string()],
+        co_code: vec![
+            ("SetLineno".to_string(), Some(1)),
+            ("LOAD_CONST".to_string(), Some(2)),
+            ("PRINT_ITEM".to_string(), None),
+            ("PRINT_NEWLINE".to_string(), None),
+            ("LOAD_CONST".to_string(), None),
+            ("RETURN_VALUE".to_string(), None)
+        ]
+    };
+    println!("{}", serde_json::to_string(&expected).unwrap());
+
+    let deserialized: PyCodeObject = serde_json::from_str(&input).unwrap();
+    assert_eq!(expected, deserialized)
 }
