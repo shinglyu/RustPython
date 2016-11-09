@@ -16,11 +16,11 @@ use std::io::prelude::*;
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 enum NativeType {
-    None,
+    NoneType,
     Boolean(bool),
     Int(i32),
     Float(f32),
-    String(String),
+    Str(String),
     Unicode(String),
     List(Vec<NativeType>),
     Tuple(Vec<NativeType>),
@@ -67,7 +67,7 @@ impl<'a> VirtualMachine<'a> {
             environment: HashMap::new(),
             labels: HashMap::new(),
             lasti: 0,
-            return_value: NativeType::None
+            return_value: NativeType::NoneType
         }
     }
 
@@ -98,7 +98,7 @@ impl<'a> VirtualMachine<'a> {
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
-                self.stack.push(NativeType::None);
+                self.stack.push(NativeType::NoneType);
                 None
             },
             ("STORE_NAME", Some(namei)) => {
@@ -115,7 +115,7 @@ impl<'a> VirtualMachine<'a> {
                 // We need to load the underlying value the name points to, but stuff like
                 // AssertionError is in the names right after compile, so we load the string
                 // instead for now
-                self.stack.push(NativeType::String(code.names[namei].to_string()));
+                self.stack.push(NativeType::Str(code.names[namei].to_string()));
                 None
             },
             ("COMPARE_OP", Some(cmp_op_i)) => {
@@ -215,8 +215,8 @@ impl<'a> VirtualMachine<'a> {
                     (NativeType::Float(v1f), NativeType::Float(v2f)) => {
                         self.stack.push(NativeType::Float(v2f + v1f));
                     }
-                    (NativeType::String(str1), NativeType::String(str2)) => {
-                        self.stack.push(NativeType::String(format!("{}{}", str2, str1)));
+                    (NativeType::Str(str1), NativeType::Str(str2)) => {
+                        self.stack.push(NativeType::Str(format!("{}{}", str2, str1)));
 
                     }
                     _ => panic!("TypeError in BINARY_ADD")
@@ -392,7 +392,7 @@ struct Code<'a> {
 fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
     // println!("{:?}", val_str);
     match val_str {
-        "None" => Ok(NativeType::None),
+        "None" => Ok(NativeType::NoneType),
         "True" => Ok(NativeType::Boolean(true)),
         "False" => Ok(NativeType::Boolean(false)),
         _ => {
@@ -405,7 +405,7 @@ fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
             }
 
             if val_str.starts_with("\'") && val_str.ends_with("\'") {
-                return Ok(NativeType::String(val_str[1..val_str.len()-1].to_string()))
+                return Ok(NativeType::Str(val_str[1..val_str.len()-1].to_string()))
             }
 
             if val_str.starts_with("u\'") && val_str.ends_with("\'") {
@@ -413,7 +413,7 @@ fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
             }
 
             if val_str.starts_with("(") && val_str.ends_with(")") {
-                return Ok(NativeType::String(val_str[1..val_str.len()-1].to_string()))
+                return Ok(NativeType::Str(val_str[1..val_str.len()-1].to_string()))
             }
 
             Err(())
@@ -486,13 +486,13 @@ fn main() {
 #[test]
 fn test_parse_native_type() {
 
-    assert_eq!(NativeType::None, parse_native_type("None").unwrap());
+    assert_eq!(NativeType::NoneType, parse_native_type("None").unwrap());
     assert_eq!(NativeType::Boolean(true), parse_native_type("True").unwrap());
     assert_eq!(NativeType::Boolean(false), parse_native_type("False").unwrap());
     assert_eq!(NativeType::Int(3), parse_native_type("3").unwrap());
     assert_eq!(NativeType::Float(3.0), parse_native_type("3.0").unwrap());
     assert_eq!(NativeType::Float(3.5), parse_native_type("3.5").unwrap());
-    assert_eq!(NativeType::String("foo".to_string()), parse_native_type("\'foo\'").unwrap());
+    assert_eq!(NativeType::Str("foo".to_string()), parse_native_type("\'foo\'").unwrap());
     assert_eq!(NativeType::Unicode("foo".to_string()), parse_native_type("u\'foo\'").unwrap());
 }
 
@@ -509,7 +509,7 @@ LOAD_CONST, None
 RETURN_VALUE, None
         ";
     let expected = Code { // Fill me with a more sensible data
-        consts: vec![NativeType::Int(1), NativeType::None, NativeType::Int(2)], 
+        consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
         names: vec!["a", "b"],
         op_codes: vec![
             ("SetLineno", Some(1)),
@@ -533,7 +533,7 @@ LOAD_CONST, 0
 RETURN_VALUE, None
 ";
     let expected = Code { // Fill me with a more sensible data
-        consts: vec![NativeType::None], 
+        consts: vec![NativeType::NoneType], 
         names: vec![],
         op_codes: vec![
             ("SetLineno", Some(1)),
@@ -549,7 +549,7 @@ RETURN_VALUE, None
 fn test_vm() {
 
     let code = Code {
-        consts: vec![NativeType::Int(1), NativeType::None, NativeType::Int(2)], 
+        consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
         names: vec![],
         op_codes: vec![
             ("LOAD_CONST", Some(2)),
@@ -573,23 +573,11 @@ struct PyCodeObject {
 #[test]
 fn test_parse_jsonbytecode() {
 
-    let input = "{\
-\"co_code\": [\
-    [ \"LOAD_CONST\", 0 ],\
-    [ \"LOAD_CONST\", 0 ],\
-    [ \"POP_TOP\", null ],\
-],\
-\"co_consts\": [ ],\
-\"co_names\": [ \"print\" ] \
-}";
-
-let input = "{\"co_consts\":[{\"Int\":1},\"None\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
-
-let input = "{\"co_consts\"\
-             :[{\"Int\":1},\"None\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
+let input = "{\"co_consts\":[{\"Int\":1},\"NoneType\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
+// let input = "{\"co_names\": [\"print\"], \"co_code\": [[\"LOAD_CONST\", 0], [\"LOAD_CONST\", 0], [\"COMPARE_OP\", 2], [\"POP_JUMP_IF_FALSE\", 25], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 1], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"JUMP_FORWARD\", 10], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 2], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"LOAD_CONST\", 0], [\"LOAD_CONST\", 3], [\"COMPARE_OP\", 2], [\"POP_JUMP_IF_FALSE\", 60], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 1], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"JUMP_FORWARD\", 10], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 2], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"LOAD_CONST\", 4], [\"RETURN_VALUE\", null]], \"co_consts\": [{\"Int\": 1}, {\"Str\": \"equal\"}, {\"Str\": \"not equal\"}, {\"Int\": 2}, {\"NoneType\": null}]}";
 
     let expected = PyCodeObject { // Fill me with a more sensible data
-        co_consts: vec![NativeType::Int(1), NativeType::None, NativeType::Int(2)], 
+        co_consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
         co_names: vec!["print".to_string()],
         co_code: vec![
             ("SetLineno".to_string(), Some(1)),

@@ -9,12 +9,21 @@ class CodeEncoder(json.JSONEncoder):
         if (isinstance(obj, types.CodeType)):
             return (
                 {
-                    "co_consts": obj.co_consts,
+                    "co_consts": consts_to_rust_enum(obj.co_consts),
                     "co_names": obj.co_names,
                     "co_code": parse_co_code_to_str(obj)
                 }
             )
         return json.JSONEncoder.default(self, obj)
+
+
+def consts_to_rust_enum(consts):
+    def capitalize_first(s):
+        return s[0].upper() + s[1:]
+
+    def const_to_rust_enum(const):
+        return {capitalize_first(str(type(const).__name__)): const}
+    return list(map(const_to_rust_enum, consts))
 
 
 def parse_co_code_to_str(code):
