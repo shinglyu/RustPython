@@ -86,13 +86,13 @@ impl<'a> VirtualMachine<'a> {
     }
 
     // Can we get rid of the code paramter?
-    fn dispatch(&mut self, op_code: (&str, Option<usize>), code: &Code<'a>) -> Option<String> {
+    fn dispatch(&mut self, op_code: &(usize, String, Option<usize>), code: &'a PyCodeObject) -> Option<String> {
         debug!("{:?}", op_code);
         debug!("stack:{:?}", self.stack);
-        match op_code {
+        match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
-                self.stack.push(code.consts[consti].clone());
+                self.stack.push(code.co_consts[consti].clone());
                 None
             },
             // TODO: universal stack element type
@@ -103,19 +103,19 @@ impl<'a> VirtualMachine<'a> {
             },
             ("STORE_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
-                self.environment.insert(code.names[namei], self.stack.pop().unwrap());
+                self.environment.insert(&code.co_names[namei], self.stack.pop().unwrap());
                 None
             },
             ("LOAD_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
-                self.stack.push(self.environment.get(code.names[namei]).unwrap().clone());
+                self.stack.push(self.environment.get::<str>(&code.co_names[namei]).unwrap().clone());
                 None
             },
             ("LOAD_GLOBAL", Some(namei)) => {
                 // We need to load the underlying value the name points to, but stuff like
                 // AssertionError is in the names right after compile, so we load the string
                 // instead for now
-                self.stack.push(NativeType::Str(code.names[namei].to_string()));
+                self.stack.push(NativeType::Str(code.co_names[namei].to_string()));
                 None
             },
             ("COMPARE_OP", Some(cmp_op_i)) => {
@@ -360,18 +360,18 @@ impl<'a> VirtualMachine<'a> {
 
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn exec(&mut self, code: Code<'a>){
+    fn exec(&mut self, code: &'a PyCodeObject){
 
-        for (line_no, op) in code.op_codes.iter().enumerate() {
-            if let ("LABEL", Some(id)) = *op {
-                self.labels.insert(id, line_no);
-            }
+        let mut curr_offset = 0;
+        for (idx, op) in code.co_code.iter().enumerate() {
+            self.labels.insert(curr_offset, idx);
+            curr_offset += op.0;
         }
 
         //let mut why = None;
         // Change this to a loop for jump
-        while self.lasti < code.op_codes.len() {
-            let op_code = code.op_codes[self.lasti];
+        while self.lasti < code.co_code.len() {
+            let ref op_code = code.co_code[self.lasti];
             self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
             let why = self.dispatch(op_code, &code);
             if self.blocks.len() > 0 {
@@ -381,7 +381,14 @@ impl<'a> VirtualMachine<'a> {
     }
 }
 
-// The derive is temporarily disabled for testing native type
+#[derive(PartialEq, Debug, Serialize, Deserialize)]
+struct PyCodeObject {
+    co_consts: Vec<NativeType>,
+    co_names: Vec<String>,
+    co_code: Vec<(usize, String, Option<usize>)> //size, name, args
+}
+
+// We want to migrate this to PyCodeObject
 #[derive(PartialEq, Debug)]
 struct Code<'a> {
     consts: Vec<NativeType>,
@@ -475,11 +482,10 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
     // println!("Read string");
-    let code = parse_bytecode(&s);
-    // println!("Read code");
+    let code: PyCodeObject = serde_json::from_str(&s).unwrap();
 
     let mut vm = VirtualMachine::new();
-    vm.exec(code);
+    vm.exec(&code);
     // println!("Done");
 }
 
@@ -548,44 +554,37 @@ RETURN_VALUE, None
 #[test]
 fn test_vm() {
 
-    let code = Code {
-        consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
-        names: vec![],
-        op_codes: vec![
-            ("LOAD_CONST", Some(2)),
-            ("PRINT_ITEM", None),
-            ("PRINT_NEWLINE", None),
-            ("LOAD_CONST", None),
-            ("RETURN_VALUE", None)
+    let code = PyCodeObject {
+        co_consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
+        co_names: vec![],
+        co_code: vec![
+            (3, "LOAD_CONST".to_string(), Some(2)),
+            (1, "PRINT_ITEM".to_string(), None),
+            (1, "PRINT_NEWLINE".to_string(), None),
+            (3, "LOAD_CONST".to_string(), None),
+            (1, "RETURN_VALUE".to_string(), None)
         ]
     };
     let mut vm = VirtualMachine::new();
-    assert_eq!((), vm.exec(code));
+    assert_eq!((), vm.exec(&code));
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
-struct PyCodeObject {
-    co_consts: Vec<NativeType>,
-    co_names: Vec<String>,
-    co_code: Vec<(String, Option<usize>)>
-}
 
 #[test]
 fn test_parse_jsonbytecode() {
 
-let input = "{\"co_consts\":[{\"Int\":1},\"NoneType\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[\"SetLineno\",1],[\"LOAD_CONST\",2],[\"PRINT_ITEM\",null],[\"PRINT_NEWLINE\",null],[\"LOAD_CONST\",null],[\"RETURN_VALUE\",null]]}";
+let input = "{\"co_consts\":[{\"Int\":1},\"NoneType\",{\"Int\":2}],\"co_names\":[\"print\"],\"co_code\":[[3,\"LOAD_CONST\",2],[1,\"PRINT_ITEM\",null],[1,\"PRINT_NEWLINE\",null],[3,\"LOAD_CONST\",null],[1,\"RETURN_VALUE\",null]]}";
 // let input = "{\"co_names\": [\"print\"], \"co_code\": [[\"LOAD_CONST\", 0], [\"LOAD_CONST\", 0], [\"COMPARE_OP\", 2], [\"POP_JUMP_IF_FALSE\", 25], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 1], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"JUMP_FORWARD\", 10], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 2], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"LOAD_CONST\", 0], [\"LOAD_CONST\", 3], [\"COMPARE_OP\", 2], [\"POP_JUMP_IF_FALSE\", 60], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 1], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"JUMP_FORWARD\", 10], [\"LOAD_NAME\", 0], [\"LOAD_CONST\", 2], [\"CALL_FUNCTION\", 1], [\"POP_TOP\", null], [\"LOAD_CONST\", 4], [\"RETURN_VALUE\", null]], \"co_consts\": [{\"Int\": 1}, {\"Str\": \"equal\"}, {\"Str\": \"not equal\"}, {\"Int\": 2}, {\"NoneType\": null}]}";
 
     let expected = PyCodeObject { // Fill me with a more sensible data
         co_consts: vec![NativeType::Int(1), NativeType::NoneType, NativeType::Int(2)], 
         co_names: vec!["print".to_string()],
         co_code: vec![
-            ("SetLineno".to_string(), Some(1)),
-            ("LOAD_CONST".to_string(), Some(2)),
-            ("PRINT_ITEM".to_string(), None),
-            ("PRINT_NEWLINE".to_string(), None),
-            ("LOAD_CONST".to_string(), None),
-            ("RETURN_VALUE".to_string(), None)
+            (3, "LOAD_CONST".to_string(), Some(2)),
+            (1, "PRINT_ITEM".to_string(), None),
+            (1, "PRINT_NEWLINE".to_string(), None),
+            (3, "LOAD_CONST".to_string(), None),
+            (1, "RETURN_VALUE".to_string(), None)
         ]
     };
     println!("{}", serde_json::to_string(&expected).unwrap());

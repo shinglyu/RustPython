@@ -31,7 +31,7 @@ case "${MODE}" in
     cargo run "../${TMP_FILE}"
     ;;
   "view_bytecode" )
-    cat "${TMP_FILE}"
+    cat "${TMP_FILE}" | python -m json.tool
     ;;
   "run_dis" )
     python -m dis "${1}"

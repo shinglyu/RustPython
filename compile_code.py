@@ -11,6 +11,8 @@ class CodeEncoder(json.JSONEncoder):
                 {
                     "co_consts": consts_to_rust_enum(obj.co_consts),
                     "co_names": obj.co_names,
+                    "co_nlocals": obj.co_nlocals,
+                    "co_name": obj.co_name,
                     "co_code": parse_co_code_to_str(obj)
                 }
             )
@@ -29,7 +31,7 @@ def consts_to_rust_enum(consts):
 def parse_co_code_to_str(code):
     c = bytecode.Bytecode().from_code(code)
     return list(
-        map(lambda op: (op.name, op.arg if op.arg != bytecode.UNSET else None),
+        map(lambda op: (op.size, op.name, op.arg if op.arg != bytecode.UNSET else None),
             c.to_concrete_bytecode())
     )
 
