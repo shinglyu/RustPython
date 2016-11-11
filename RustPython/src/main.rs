@@ -15,7 +15,7 @@ use std::fs::File;
 use std::io::prelude::*;
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-enum NativeType {
+enum NativeType{
     NoneType,
     Boolean(bool),
     Int(i32),
@@ -24,6 +24,7 @@ enum NativeType {
     Unicode(String),
     List(Vec<NativeType>),
     Tuple(Vec<NativeType>),
+    Iter(Vec<NativeType>) // TODO: use Iterator instead
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -142,6 +143,46 @@ impl<'a> VirtualMachine<'a> {
                 }
                 vec.reverse();
                 self.stack.push(NativeType::List(vec));
+                None
+            },
+
+            ("GET_ITER", None) => {
+                let tos = self.stack.pop().unwrap();
+                let iter = match tos {
+                    // Return a Iterator instead              vvv
+                    NativeType::List(vec) => NativeType::Iter(vec),
+                    _ => panic!("TypeError: object is not iterable")
+                };
+                self.stack.push(iter);
+                None
+            },
+
+            ("FOR_ITER", Some(delta)) => {
+                // This function should be rewrote to use Rust native iterator
+                let tos = self.stack.pop().unwrap();
+                let result = match tos {
+                    NativeType::Iter(v) =>  {
+                        if v.len() > 0 {
+                            Some(v.clone()) // Unnessary clone here
+                        }
+                        else {
+                            None
+                        }
+                    }
+                    _ => panic!("FOR_ITER: Not an iterator")
+                };
+                if let Some(vec) = result {
+                    let (first, rest) = vec.split_first().unwrap();
+                    // Unnessary clone here
+                    self.stack.push(NativeType::Iter(rest.to_vec()));
+                    self.stack.push(first.clone());
+                }
+                else {
+                    // Iterator was already poped in the first line of this function
+                    let last_offset = self.get_bytecode_offset().unwrap();
+                    self.lasti = self.labels.get(&(last_offset + delta)).unwrap().clone();
+
+                }
                 None
             },
 
