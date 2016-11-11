@@ -19,7 +19,7 @@ enum NativeType {
     NoneType,
     Boolean(bool),
     Int(i32),
-    Float(f32),
+    Float(f64),
     Str(String),
     Unicode(String),
     List(Vec<NativeType>),
@@ -147,6 +147,9 @@ impl<'a> VirtualMachine<'a> {
                             (NativeType::Float(v1f), NativeType::Float(v2f)) => {
                                 self.stack.push(NativeType::Boolean(v2f == v1f));
                             },
+                            (NativeType::Str(v1s), NativeType::Str(v2s)) => {
+                                self.stack.push(NativeType::Boolean(v2s == v1s));
+                            },
                             _ => panic!("TypeError in COMPARE_OP")
                         };
                     }
@@ -226,10 +229,10 @@ impl<'a> VirtualMachine<'a> {
                         self.stack.push(NativeType::Int(v2i + v1i));
                     }
                     (NativeType::Float(v1f), NativeType::Int(v2i)) => {
-                        self.stack.push(NativeType::Float(v2i as f32 + v1f));
+                        self.stack.push(NativeType::Float(v2i as f64 + v1f));
                     } 
                     (NativeType::Int(v1i), NativeType::Float(v2f)) => {
-                        self.stack.push(NativeType::Float(v2f + v1i as f32));
+                        self.stack.push(NativeType::Float(v2f + v1i as f64));
                     }
                     (NativeType::Float(v1f), NativeType::Float(v2f)) => {
                         self.stack.push(NativeType::Float(v2f + v1f));
@@ -250,7 +253,7 @@ impl<'a> VirtualMachine<'a> {
                         self.stack.push(NativeType::Int(v2i.pow(v1i as u32)));
                     }
                     (NativeType::Float(v1f), NativeType::Int(v2i)) => {
-                        self.stack.push(NativeType::Float((v2i as f32).powf(v1f)));
+                        self.stack.push(NativeType::Float((v2i as f64).powf(v1f)));
                     } 
                     (NativeType::Int(v1i), NativeType::Float(v2f)) => {
                         self.stack.push(NativeType::Float(v2f.powi(v1i)));
@@ -271,10 +274,10 @@ impl<'a> VirtualMachine<'a> {
                     },
                     /*
                     (NativeType::Float(v1f), NativeType::Int(v2i)) => {
-                        self.stack.push(NativeType::Float((v2i as f32) * v1f));
+                        self.stack.push(NativeType::Float((v2i as f64) * v1f));
                     },
                     (NativeType::Int(v1i), NativeType::Float(v2f)) => {
-                        self.stack.push(NativeType::Float(v2f * (v1i as f32)));
+                        self.stack.push(NativeType::Float(v2f * (v1i as f64)));
                     },
                     (NativeType::Float(v1f), NativeType::Float(v2f)) => {
                         self.stack.push(NativeType::Float(v2f * v1f));
@@ -431,7 +434,7 @@ fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
                 return Ok(NativeType::Int(int))
             }
 
-            if let Ok(float) = val_str.parse::<f32>() {
+            if let Ok(float) = val_str.parse::<f64>() {
                 return Ok(NativeType::Float(float))
             }
 
