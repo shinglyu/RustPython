@@ -134,6 +134,17 @@ impl<'a> VirtualMachine<'a> {
                 self.stack.push(NativeType::Str(code.co_names[namei].to_string()));
                 None
             },
+
+            ("BUILD_LIST", Some(count)) => {
+                let mut vec = vec!();
+                for i in 0..count {
+                    vec.push(self.stack.pop().unwrap());
+                }
+                vec.reverse();
+                self.stack.push(NativeType::List(vec));
+                None
+            },
+
             ("COMPARE_OP", Some(cmp_op_i)) => {
                 let v1 = self.stack.pop().unwrap();
                 let v2 = self.stack.pop().unwrap();
@@ -319,6 +330,21 @@ impl<'a> VirtualMachine<'a> {
                     },
                     _ => panic!("TypeError in BINARY_SUBSTRACT")
                 }
+                None
+            },
+
+            ("BINARY_SUBSCR", None) => {
+                let tos = self.stack.pop().unwrap();
+                let tos1 = self.stack.pop().unwrap();
+                if let (NativeType::List(v), NativeType::Int(idx)) = (tos1, tos) {
+                    if idx as usize >= v.len() {
+                        // TODO: change this to a exception
+                        panic!("IndexError: list index out of range");
+                    }
+                    self.stack.push(v[idx as usize].clone());
+                } else {
+                    panic!("TypeError in BINARY_SUBSTRACT");
+                };
                 None
             },
             ("ROT_TWO", None) => {
