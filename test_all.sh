@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # set -e 
+
+source venv/bin/activate
 #TESTCASE=tests/variables.py
 # TESTCASE=tests/variables.py
 #TESTCASE=tests/minimum.py
