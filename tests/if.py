@@ -1,9 +1,15 @@
+x = 0
 if 1 == 1:
-    print("equal")
+    x += 5
 else:
-    print("not equal")
+    x += 3
 
+assert x == 5
+
+y = 0
 if 1 == 2:
-    print("equal")
+    y += 5
 else:
-    print("not equal")
+    y += 3
+
+assert y == 3

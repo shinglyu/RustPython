@@ -151,24 +151,31 @@ impl<'a> VirtualMachine<'a> {
                 None
                 
             },
-            ("POP_JUMP_IF_TRUE", Some(ref label_id)) => {
+            ("POP_JUMP_IF_TRUE", Some(ref target)) => {
                 let v = self.stack.pop().unwrap();
                 if v == NativeType::Boolean(true) {
-                    self.lasti = self.labels.get(label_id).unwrap().clone();
+                    self.lasti = self.labels.get(target).unwrap().clone();
                 }
                 None
 
             }
-            ("POP_JUMP_IF_FALSE", Some(ref label_id)) => {
+            ("POP_JUMP_IF_FALSE", Some(ref target)) => {
                 let v = self.stack.pop().unwrap();
                 if v == NativeType::Boolean(false) {
-                    self.lasti = self.labels.get(label_id).unwrap().clone();
+                    self.lasti = self.labels.get(target).unwrap().clone();
                 }
                 None
                 
             }
-            ("JUMP_FORWARD", Some(ref label_id)) => {
-                self.lasti = self.labels.get(label_id).unwrap().clone();
+            ("JUMP_FORWARD", Some(ref delta)) => {
+                // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
+                let mut last_offset = None;
+                for (offset, instr_idx) in &self.labels {
+                    if *instr_idx == self.lasti {
+                        last_offset = Some(offset)
+                    }
+                }
+                self.lasti = self.labels.get(&(last_offset.unwrap() + delta)).unwrap().clone();
                 None
             },
             ("JUMP_ABSOLUTE", Some(ref target)) => {
