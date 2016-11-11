@@ -40,7 +40,7 @@ const CMP_OP: &'static [&'static str] = &[">",
                                           "BAD"
                                          ];
 
-       
+#[derive(Clone)]
 struct Block<'a> {
     block_type: &'a str,
     handler: usize // The destination we should jump to if the block finishes
@@ -56,6 +56,7 @@ struct VirtualMachine<'a> {
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
+    why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 
 }
@@ -67,28 +68,43 @@ impl<'a> VirtualMachine<'a> {
             environment: HashMap::new(),
             labels: HashMap::new(),
             lasti: 0,
-            return_value: NativeType::NoneType
+            return_value: NativeType::NoneType,
+            why: "none".to_string(),
         }
     }
 
-    /// Handle the block stack after we execute a bytecode, e.g. handle loop break 
-    fn manage_block_stack(&mut self, why: &Option<String>) {
-        let ref curr_block = self.blocks[self.blocks.len()-1];
-        debug!("{:?}, {:?}", curr_block.block_type, why);
-        match (curr_block.block_type, why.as_ref().map(String::as_ref)) {
-            ("loop", Some("break")) => {
+    fn unwind(&mut self, reason: String) {
+        let curr_block = self.blocks[self.blocks.len()-1].clone();
+        self.why = reason;
+        debug!("block status: {:?}, {:?}", curr_block.block_type, self.why);
+        match (curr_block.block_type.as_ref(), self.why.as_ref()) {
+            ("loop", "break") => {
                 self.lasti = curr_block.handler; //self.labels[curr_block.handler]; // Jump to the end
                 // Return the why as None
+                self.blocks.pop();
             },
-            ("loop", None) => (), //skipped
+            ("loop", "none") => (), //skipped
             _ => panic!("block stack operation not implemented")
         }
     }
 
+    /// Get the current bytecode offset calculated from self.lasti
+    fn get_bytecode_offset(&self) -> Option<usize> {
+        // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
+        let mut last_offset = None;
+        for (offset, instr_idx) in &self.labels {
+            if *instr_idx == self.lasti {
+                last_offset = Some(*offset)
+            }
+        }
+        last_offset
+    }
+
     // Can we get rid of the code paramter?
     fn dispatch(&mut self, op_code: &(usize, String, Option<usize>), code: &'a PyCodeObject) -> Option<String> {
-        debug!("{:?}", op_code);
         debug!("stack:{:?}", self.stack);
+        debug!("env  :{:?}", self.environment);
+        debug!("Executing op code: {:?}", op_code);
         match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
@@ -168,14 +184,8 @@ impl<'a> VirtualMachine<'a> {
                 
             }
             ("JUMP_FORWARD", Some(ref delta)) => {
-                // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
-                let mut last_offset = None;
-                for (offset, instr_idx) in &self.labels {
-                    if *instr_idx == self.lasti {
-                        last_offset = Some(offset)
-                    }
-                }
-                self.lasti = self.labels.get(&(last_offset.unwrap() + delta)).unwrap().clone();
+                let last_offset = self.get_bytecode_offset().unwrap();
+                self.lasti = self.labels.get(&(last_offset + delta)).unwrap().clone();
                 None
             },
             ("JUMP_ABSOLUTE", Some(ref target)) => {
@@ -183,6 +193,8 @@ impl<'a> VirtualMachine<'a> {
                 None
             },
             ("BREAK_LOOP", None) => {
+                self.unwind("break".to_string());
+                // Do we still need to return the why if we use unwind from jsapy?
                 Some("break".to_string()) 
             },
             ("RAISE_VARARGS", Some(argc)) => {
@@ -342,10 +354,11 @@ impl<'a> VirtualMachine<'a> {
                 self.return_value = self.stack.pop().unwrap();
                 Some("return".to_string())
             },
-            ("SETUP_LOOP", Some(handler)) => {
+            ("SETUP_LOOP", Some(delta)) => {
+                let curr_offset = self.get_bytecode_offset().unwrap();
                 self.blocks.push(Block {
                     block_type: "loop",
-                    handler: handler,
+                    handler: *self.labels.get(&(curr_offset + delta)).unwrap(),
                 });
                 None
             },
@@ -377,13 +390,16 @@ impl<'a> VirtualMachine<'a> {
 
         //let mut why = None;
         // Change this to a loop for jump
+        debug!("labels:   {:?}", self.labels);
+        debug!("co_names: {:?}", code.co_names);
         while self.lasti < code.co_code.len() {
             let ref op_code = code.co_code[self.lasti];
             self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
             let why = self.dispatch(op_code, &code);
-            if self.blocks.len() > 0 {
+            /*if self.blocks.len() > 0 {
                 self.manage_block_stack(&why);
             }
+            */
         }
     }
 }
