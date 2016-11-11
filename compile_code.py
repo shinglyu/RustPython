@@ -7,16 +7,19 @@ import types
 class CodeEncoder(json.JSONEncoder):
     def default(self, obj):
         if (isinstance(obj, types.CodeType)):
-            return (
-                {
-                    "co_consts": consts_to_rust_enum(obj.co_consts),
-                    "co_names": obj.co_names,
-                    "co_nlocals": obj.co_nlocals,
-                    "co_name": obj.co_name,
-                    "co_code": parse_co_code_to_str(obj)
-                }
-            )
+            return serialize_code(obj)
         return json.JSONEncoder.default(self, obj)
+
+def serialize_code(code):
+    c = bytecode.Bytecode().from_code(code).to_concrete_bytecode()
+    return (
+        {
+            "co_consts": consts_to_rust_enum(c.consts),
+            "co_names": c.names,
+            "co_name": c.name,
+            "co_code": parse_co_code_to_str(c)
+        }
+    )
 
 
 def consts_to_rust_enum(consts):
@@ -28,11 +31,10 @@ def consts_to_rust_enum(consts):
     return list(map(const_to_rust_enum, consts))
 
 
-def parse_co_code_to_str(code):
-    c = bytecode.Bytecode().from_code(code)
+def parse_co_code_to_str(c):
     return list(
         map(lambda op: (op.size, op.name, op.arg if op.arg != bytecode.UNSET else None),
-            c.to_concrete_bytecode())
+            c)
     )
 
 

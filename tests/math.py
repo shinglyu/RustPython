@@ -1,12 +1,12 @@
 a = 4
 
-print(a ** 3)
-print(a * 3)
-print(a / 2)
-print(a % 3)
-print(a - 3)
-print(-a)
-print(+a)
+#print(a ** 3)
+#print(a * 3)
+#print(a / 2)
+#print(a % 3)
+#print(a - 3)
+#print(-a)
+#print(+a)
 
 assert a ** 3 == 64
 assert a * 3 == 12

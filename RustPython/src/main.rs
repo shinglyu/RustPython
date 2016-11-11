@@ -285,7 +285,7 @@ impl<'a> VirtualMachine<'a> {
                 }
                 None
             },
-            ("BINARY_DIVIDE", None) => {
+            ("BINARY_TRUE_DIVIDE", None) => {
                 let v1 = self.stack.pop().unwrap();
                 let v2 = self.stack.pop().unwrap();
                 match (v1, v2) {
@@ -392,6 +392,7 @@ impl<'a> VirtualMachine<'a> {
         // Change this to a loop for jump
         debug!("labels:   {:?}", self.labels);
         debug!("co_names: {:?}", code.co_names);
+        debug!("co_consts: {:?}", code.co_consts);
         while self.lasti < code.co_code.len() {
             let ref op_code = code.co_code[self.lasti];
             self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
