@@ -48,25 +48,30 @@ struct Block<'a> {
     // level?
 }
 
-struct VirtualMachine<'a> {
+struct Frame<'a> {
     // TODO: We are using Option<i32> in stack for handline None return value
+    code: &'a PyCodeObject,
     // We need 1 stack per frame
     stack: Vec<NativeType>,   // The main data frame of the stack machine
     blocks: Vec<Block<'a>>,  // Block frames, for controling loops and exceptions
-    environment: HashMap<&'a str, NativeType>, // Variables
+    locals: HashMap<&'a str, NativeType>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
     why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
-
 }
+
+struct VirtualMachine<'a> {
+    frames: Vec<Frame>
+}
+
 impl<'a> VirtualMachine<'a> {
     fn new() -> VirtualMachine<'a> {
         VirtualMachine {
             stack: vec![],
             blocks: vec![],
-            environment: HashMap::new(),
+            locals: HashMap::new(),
             labels: HashMap::new(),
             lasti: 0,
             return_value: NativeType::NoneType,
@@ -104,7 +109,7 @@ impl<'a> VirtualMachine<'a> {
     // Can we get rid of the code paramter?
     fn dispatch(&mut self, op_code: &(usize, String, Option<usize>), code: &'a PyCodeObject) -> Option<String> {
         debug!("stack:{:?}", self.stack);
-        debug!("env  :{:?}", self.environment);
+        debug!("env  :{:?}", self.locals);
         debug!("Executing op code: {:?}", op_code);
         match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
@@ -120,12 +125,12 @@ impl<'a> VirtualMachine<'a> {
             },
             ("STORE_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
-                self.environment.insert(&code.co_names[namei], self.stack.pop().unwrap());
+                self.locals.insert(&code.co_names[namei], self.stack.pop().unwrap());
                 None
             },
             ("LOAD_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
-                self.stack.push(self.environment.get::<str>(&code.co_names[namei]).unwrap().clone());
+                self.stack.push(self.locals.get::<str>(&code.co_names[namei]).unwrap().clone());
                 None
             },
             ("LOAD_GLOBAL", Some(namei)) => {
@@ -448,9 +453,23 @@ impl<'a> VirtualMachine<'a> {
 
     }
 
+    fn make_frame(code: &'a PyCodeObject) {
+        //populate the globals and locals
+        Frame {
+            code: code,
+            stack: vec![],
+            blocks: vec![],
+            locals: HashMap::new(),
+            labels: HashMap::new(),
+            lasti: 0,
+            return_value: NativeType::NoneType,
+            why: "none".to_string(),
+        }
+    }
+
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn exec(&mut self, code: &'a PyCodeObject){
+    fn run_frame(&mut self, code: &'a PyCodeObject){
 
         let mut curr_offset = 0;
         for (idx, op) in code.co_code.iter().enumerate() {
@@ -472,6 +491,12 @@ impl<'a> VirtualMachine<'a> {
             }
             */
         }
+    }
+
+    fn run_code(&mut self, code: &'a PyCodeObject) {
+        let frame = self.make_frame(code);
+        self.run_frame(frame);
+        // check if there are any leftover frame, fail if any
     }
 }
 
