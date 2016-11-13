@@ -48,13 +48,13 @@ struct Block<'a> {
     // level?
 }
 
-struct Frame<'a> {
+struct Frame {
     // TODO: We are using Option<i32> in stack for handline None return value
-    code: &'a PyCodeObject,
+    code: &PyCodeObject,
     // We need 1 stack per frame
     stack: Vec<NativeType>,   // The main data frame of the stack machine
-    blocks: Vec<Block<'a>>,  // Block frames, for controling loops and exceptions
-    locals: HashMap<&'a str, NativeType>, // Variables
+    blocks: Vec<Block>,  // Block frames, for controling loops and exceptions
+    locals: HashMap<&str, NativeType>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
@@ -62,7 +62,7 @@ struct Frame<'a> {
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 }
 
-impl<'a> Frame<'a> {
+impl Frame {
     /// Get the current bytecode offset calculated from curr_frame.lasti
     fn get_bytecode_offset(&self) -> Option<usize> {
         // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
@@ -74,24 +74,35 @@ impl<'a> Frame<'a> {
         }
         last_offset
     }
+
+    fn get_next_opcode(&self) -> &(usize, String, Option<usize>){
+        self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
+        &self.code.co_code[self.lasti]
+    }
+
 }
 
 
-struct VirtualMachine<'a> {
-    frames: Vec<Frame<'a>>,
+struct VirtualMachine {
+    frames: Vec<Frame>,
 }
 
-impl<'a> VirtualMachine<'a> {
-    fn new() -> VirtualMachine<'a> {
+impl VirtualMachine {
+    fn new() -> VirtualMachine {
         VirtualMachine {
             frames: vec![],
         }
     }
 
-    fn curr_frame(&'a mut self) -> &mut Frame {
+    fn curr_frame(&mut self) -> &mut Frame {
         self.frames.last_mut().unwrap()
     }
-    fn unwind(&'a mut self, reason: String) {
+
+    fn pop_frame(&mut self) {
+        self.frames.pop().unwrap();
+    }
+
+    fn unwind(&mut self, reason: String) {
         let curr_frame = self.curr_frame();
         let curr_block = curr_frame.blocks[curr_frame.blocks.len()-1].clone(); // use last?
         curr_frame.why = reason;
@@ -109,16 +120,72 @@ impl<'a> VirtualMachine<'a> {
 
 
     // Can we get rid of the code paramter?
-    fn dispatch(&'a mut self, op_code: &(usize, String, Option<usize>), curr_frame: &mut Frame) -> Option<String> {
-        debug!("stack:{:?}", curr_frame.stack);
-        debug!("env  :{:?}", curr_frame.locals);
+
+    fn make_frame(&self, code: &PyCodeObject) -> Frame{
+        //populate the globals and locals
+        let mut labels = HashMap::new();
+        let mut curr_offset = 0;
+        for (idx, op) in code.co_code.iter().enumerate() {
+            labels.insert(curr_offset, idx);
+            curr_offset += op.0;
+        }
+        Frame {
+            code: code,
+            stack: vec![],
+            blocks: vec![],
+            locals: HashMap::new(),
+            labels: labels,
+            lasti: 0,
+            return_value: NativeType::NoneType,
+            why: "none".to_string(),
+        }
+    }
+
+    // The Option<i32> is the return value of the frame, remove when we have implemented frame
+    // TODO: read the op codes directly from the internal code object
+    fn run_frame(&mut self, frame: Frame){
+        self.frames.push(frame);
+
+        //let mut why = None;
+        // Change this to a loop for jump
+        loop {
+        //while curr_frame.lasti < curr_frame.code.co_code.len() {
+            let op_code = self.curr_frame().get_next_opcode();
+            let why = self.dispatch(op_code);
+            /*if curr_frame.blocks.len() > 0 {
+                self.manage_block_stack(&why);
+            }
+            */
+            if let Some(_) = why {
+                break;
+            }
+        }
+        self.pop_frame();
+    }
+
+    fn run_code(&mut self, code: &PyCodeObject) {
+        let mut frame = self.make_frame(code);
+        self.run_frame(frame);
+        // check if there are any leftover frame, fail if any
+    }
+
+    fn push_to_stack(&mut self, val: NativeType) {
+        self.curr_frame().stack.push(val);
+    }
+
+    fn dispatch<'b>(&'b self, op_code: &(usize, String, Option<usize>)) -> Option<String> {
+        let curr_frame = self; //remove this
+        debug!("stack:{:?}", self.curr_frame().stack);
+        debug!("env  :{:?}", self.curr_frame().locals);
         debug!("Executing op code: {:?}", op_code);
         match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
-                curr_frame.stack.push(curr_frame.code.co_consts[consti].clone());
+                self.push_to_stack(self.curr_frame().code.co_consts[consti].clone());
                 None
             },
+            _ => panic!("FOO")
+            /*
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
@@ -255,7 +322,6 @@ impl<'a> VirtualMachine<'a> {
                 None
             },
             ("BREAK_LOOP", None) => {
-                self.unwind("break".to_string());
                 // Do we still need to return the why if we use unwind from jsapy?
                 Some("break".to_string()) 
             },
@@ -453,68 +519,9 @@ impl<'a> VirtualMachine<'a> {
                 println!("Unrecongnizable op code: {}", name);
                 None
             }
-        }
-
-    }
-
-    fn make_frame(&self, code: &'a PyCodeObject) -> Frame<'a>{
-        //populate the globals and locals
-        Frame {
-            code: code,
-            stack: vec![],
-            blocks: vec![],
-            locals: HashMap::new(),
-            labels: HashMap::new(),
-            lasti: 0,
-            return_value: NativeType::NoneType,
-            why: "none".to_string(),
-        }
-    }
-
-    fn get_next_opcode(& self) -> (usize, string, option<usize>){
-        let curr_frame = self.curr_frame();
-        curr_frame.lasti += 1; // Let's increment here, so if we use jump it will be overrided
-        curr_frame.code.co_code[curr_frame.lasti]
-
-    }
-    // The Option<i32> is the return value of the frame, remove when we have implemented frame
-    // TODO: read the op codes directly from the internal code object
-    fn run_frame(&'a mut self, frame: Frame<'a>){
-        self.frames.push(frame);
-        {
-            let curr_frame = self.curr_frame();
-
-            let mut curr_offset = 0;
-            for (idx, op) in curr_frame.code.co_code.iter().enumerate() {
-                curr_frame.labels.insert(curr_offset, idx);
-                curr_offset += op.0;
-            }
-            debug!("labels:   {:?}", curr_frame.labels);
-            debug!("co_names: {:?}", curr_frame.code.co_names);
-            debug!("co_consts: {:?}", curr_frame.code.co_consts);
-        }
-
-        //let mut why = None;
-        // Change this to a loop for jump
-        loop {
-        //while curr_frame.lasti < curr_frame.code.co_code.len() {
-            let op_code = self.get_next_opcode();
-            let why = self.dispatch(op_code);
-            /*if curr_frame.blocks.len() > 0 {
-                self.manage_block_stack(&why);
-            }
             */
-            if let Some(_) = why {
-                break;
-            }
         }
-        self.frames.pop().unwrap();
-    }
 
-    fn run_code(&'a mut self, code: &'a PyCodeObject) {
-        let mut frame = self.make_frame(code);
-        self.run_frame(frame);
-        // check if there are any leftover frame, fail if any
     }
 }
 
@@ -522,7 +529,7 @@ impl<'a> VirtualMachine<'a> {
 struct PyCodeObject {
     co_consts: Vec<NativeType>,
     co_names: Vec<String>,
-    co_code: Vec<(usize, string, option<usize>)> //size, name, args
+    co_code: Vec<(usize, String, Option<usize>)> //size, name, args
 }
 
 // We want to migrate this to PyCodeObject
