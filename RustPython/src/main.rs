@@ -42,19 +42,19 @@ const CMP_OP: &'static [&'static str] = &[">",
                                          ];
 
 #[derive(Clone)]
-struct Block<'a> {
-    block_type: &'a str,
+struct Block {
+    block_type: String, //Enum?
     handler: usize // The destination we should jump to if the block finishes
     // level?
 }
 
-struct Frame {
+struct Frame<'a> {
     // TODO: We are using Option<i32> in stack for handline None return value
-    code: &PyCodeObject,
+    code: &'a PyCodeObject,
     // We need 1 stack per frame
     stack: Vec<NativeType>,   // The main data frame of the stack machine
     blocks: Vec<Block>,  // Block frames, for controling loops and exceptions
-    locals: HashMap<&str, NativeType>, // Variables
+    locals: HashMap<&'a str, NativeType>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
@@ -62,7 +62,7 @@ struct Frame {
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 }
 
-impl Frame {
+impl<'a> Frame<'a> {
     /// Get the current bytecode offset calculated from curr_frame.lasti
     fn get_bytecode_offset(&self) -> Option<usize> {
         // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
@@ -83,12 +83,12 @@ impl Frame {
 }
 
 
-struct VirtualMachine {
-    frames: Vec<Frame>,
+struct VirtualMachine<'a> {
+    frames: Vec<Frame<'a>>,
 }
 
-impl VirtualMachine {
-    fn new() -> VirtualMachine {
+impl<'a> VirtualMachine<'a> {
+    fn new() -> VirtualMachine<'a> {
         VirtualMachine {
             frames: vec![],
         }
