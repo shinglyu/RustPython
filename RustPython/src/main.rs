@@ -24,7 +24,8 @@ enum NativeType{
     Unicode(String),
     List(Vec<NativeType>),
     Tuple(Vec<NativeType>),
-    Iter(Vec<NativeType>) // TODO: use Iterator instead
+    Iter(Vec<NativeType>), // TODO: use Iterator instead
+    Code(PyCodeObject)
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -80,6 +81,14 @@ impl Frame {
         &self.code.co_code[self.lasti]
     }
 
+}
+
+struct Function {}
+
+impl Function {
+    fn __call__() {
+
+    }
 }
 
 
@@ -523,7 +532,7 @@ impl VirtualMachine {
     }
 }
 
-#[derive(PartialEq, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
 struct PyCodeObject {
     co_consts: Vec<NativeType>,
     co_names: Vec<String>,
