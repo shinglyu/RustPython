@@ -48,13 +48,13 @@ struct Block {
     // level?
 }
 
-struct Frame<'a> {
+struct Frame {
     // TODO: We are using Option<i32> in stack for handline None return value
-    code: &'a PyCodeObject,
+    code: PyCodeObject,
     // We need 1 stack per frame
     stack: Vec<NativeType>,   // The main data frame of the stack machine
     blocks: Vec<Block>,  // Block frames, for controling loops and exceptions
-    locals: HashMap<&'a str, NativeType>, // Variables
+    locals: HashMap<String, NativeType>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
@@ -62,7 +62,7 @@ struct Frame<'a> {
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 }
 
-impl<'a> Frame<'a> {
+impl Frame {
     /// Get the current bytecode offset calculated from curr_frame.lasti
     fn get_bytecode_offset(&self) -> Option<usize> {
         // Linear search the labels HashMap, inefficient. Consider build a reverse HashMap
@@ -75,7 +75,7 @@ impl<'a> Frame<'a> {
         last_offset
     }
 
-    fn get_next_opcode(&self) -> &(usize, String, Option<usize>){
+    fn get_next_opcode(&mut self) -> &(usize, String, Option<usize>){
         self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
         &self.code.co_code[self.lasti]
     }
@@ -83,12 +83,12 @@ impl<'a> Frame<'a> {
 }
 
 
-struct VirtualMachine<'a> {
-    frames: Vec<Frame<'a>>,
+struct VirtualMachine{
+    frames: Vec<Frame>,
 }
 
-impl<'a> VirtualMachine<'a> {
-    fn new() -> VirtualMachine<'a> {
+impl VirtualMachine {
+    fn new() -> VirtualMachine {
         VirtualMachine {
             frames: vec![],
         }
@@ -121,7 +121,7 @@ impl<'a> VirtualMachine<'a> {
 
     // Can we get rid of the code paramter?
 
-    fn make_frame(&self, code: &PyCodeObject) -> Frame{
+    fn make_frame(&self, code: PyCodeObject) -> Frame{
         //populate the globals and locals
         let mut labels = HashMap::new();
         let mut curr_offset = 0;
@@ -143,27 +143,29 @@ impl<'a> VirtualMachine<'a> {
 
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn run_frame(&mut self, frame: Frame){
-        self.frames.push(frame);
+    fn run_frame(&mut self, mut frame: Frame){
+        //self.frames.push(frame);
 
         //let mut why = None;
         // Change this to a loop for jump
         loop {
-        //while curr_frame.lasti < curr_frame.code.co_code.len() {
-            let op_code = self.curr_frame().get_next_opcode();
-            let why = self.dispatch(op_code);
+            //while curr_frame.lasti < curr_frame.code.co_code.len() {
+            //let op_code = frame.get_next_opcode();
+            let op_code = &frame.code.co_code[frame.lasti].clone();
+            frame.lasti += 1;
+            let why = self.dispatch(op_code, &mut frame);
             /*if curr_frame.blocks.len() > 0 {
-                self.manage_block_stack(&why);
-            }
-            */
+              self.manage_block_stack(&why);
+              }
+              */
             if let Some(_) = why {
                 break;
             }
         }
-        self.pop_frame();
+        //self.pop_frame();
     }
 
-    fn run_code(&mut self, code: &PyCodeObject) {
+    fn run_code(&mut self, code: PyCodeObject) {
         let mut frame = self.make_frame(code);
         self.run_frame(frame);
         // check if there are any leftover frame, fail if any
@@ -173,19 +175,16 @@ impl<'a> VirtualMachine<'a> {
         self.curr_frame().stack.push(val);
     }
 
-    fn dispatch<'b>(&'b self, op_code: &(usize, String, Option<usize>)) -> Option<String> {
-        let curr_frame = self; //remove this
-        debug!("stack:{:?}", self.curr_frame().stack);
-        debug!("env  :{:?}", self.curr_frame().locals);
+    fn dispatch(&mut self, op_code: &(usize, String, Option<usize>), curr_frame: &mut Frame) -> Option<String> {
+        debug!("stack:{:?}", curr_frame.stack);
+        debug!("env  :{:?}", curr_frame.locals);
         debug!("Executing op code: {:?}", op_code);
         match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
-                self.push_to_stack(self.curr_frame().code.co_consts[consti].clone());
+                curr_frame.stack.push(curr_frame.code.co_consts[consti].clone());
                 None
             },
-            _ => panic!("FOO")
-            /*
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
@@ -194,7 +193,7 @@ impl<'a> VirtualMachine<'a> {
             },
             ("STORE_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
-                curr_frame.locals.insert(&curr_frame.code.co_names[namei], curr_frame.stack.pop().unwrap());
+                curr_frame.locals.insert(curr_frame.code.co_names[namei].clone(), curr_frame.stack.pop().unwrap());
                 None
             },
             ("LOAD_NAME", Some(namei)) => {
@@ -502,7 +501,7 @@ impl<'a> VirtualMachine<'a> {
             ("SETUP_LOOP", Some(delta)) => {
                 let curr_offset = curr_frame.get_bytecode_offset().unwrap();
                 curr_frame.blocks.push(Block {
-                    block_type: "loop",
+                    block_type: "loop".to_string(),
                     handler: *curr_frame.labels.get(&(curr_offset + delta)).unwrap(),
                 });
                 None
@@ -519,7 +518,6 @@ impl<'a> VirtualMachine<'a> {
                 println!("Unrecongnizable op code: {}", name);
                 None
             }
-            */
         }
 
     }
@@ -532,14 +530,8 @@ struct PyCodeObject {
     co_code: Vec<(usize, String, Option<usize>)> //size, name, args
 }
 
-// We want to migrate this to PyCodeObject
-#[derive(PartialEq, Debug)]
-struct Code<'a> {
-    consts: Vec<NativeType>,
-    names: Vec<&'a str>,
-    op_codes: Vec<(&'a str, Option<usize>)>
-}
 
+/*
 fn parse_native_type(val_str: &str) -> Result<NativeType, ()> {
     // println!("{:?}", val_str);
     match val_str {
@@ -614,7 +606,7 @@ fn parse_bytecode(s: &str) -> Code {
         names: names,
     }
 }
-
+*/
 fn main() {
     env_logger::init().unwrap();
     // TODO: read this from args
@@ -629,7 +621,7 @@ fn main() {
     let code: PyCodeObject = serde_json::from_str(&s).unwrap();
 
     let mut vm = VirtualMachine::new();
-    vm.run_code(&code);
+    vm.run_code(code);
     // println!("Done");
 }
 
