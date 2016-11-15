@@ -83,13 +83,25 @@ impl Frame {
 
 }
 
-struct Function {}
+/*
+struct Function {
+    vm: &VirtualMachine,
+    code: PyCodeObject
+}
 
 impl Function {
+    fn new(vm: &VirtualMachine, Code) -> Function {
+        Function {
+            vm: vm,
+            code:
+        }
+    }
+
     fn __call__() {
 
     }
 }
+*/
 
 
 struct VirtualMachine{
@@ -153,16 +165,17 @@ impl VirtualMachine {
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
     fn run_frame(&mut self, mut frame: Frame){
-        //self.frames.push(frame);
+        self.frames.push(frame);
 
         //let mut why = None;
         // Change this to a loop for jump
         loop {
             //while curr_frame.lasti < curr_frame.code.co_code.len() {
             //let op_code = frame.get_next_opcode();
-            let op_code = &frame.code.co_code[frame.lasti].clone();
-            frame.lasti += 1;
-            let why = self.dispatch(op_code, &mut frame);
+            let curr_frame = self.frames.last_mut().unwrap();
+            let op_code = &curr_frame.code.co_code[curr_frame.lasti].clone();
+            curr_frame.lasti += 1;
+            let why = self.dispatch(op_code);
             /*if curr_frame.blocks.len() > 0 {
               self.manage_block_stack(&why);
               }
@@ -171,7 +184,7 @@ impl VirtualMachine {
                 break;
             }
         }
-        //self.pop_frame();
+        self.pop_frame();
     }
 
     fn run_code(&mut self, code: PyCodeObject) {
@@ -184,7 +197,8 @@ impl VirtualMachine {
         self.curr_frame().stack.push(val);
     }
 
-    fn dispatch(&mut self, op_code: &(usize, String, Option<usize>), curr_frame: &mut Frame) -> Option<String> {
+    fn dispatch(&mut self, op_code: &(usize, String, Option<usize>)) -> Option<String> {
+        let curr_frame = self.frames.last_mut().unwrap();
         debug!("stack:{:?}", curr_frame.stack);
         debug!("env  :{:?}", curr_frame.locals);
         debug!("Executing op code: {:?}", op_code);
