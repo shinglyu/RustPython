@@ -171,10 +171,12 @@ impl VirtualMachine {
         // Change this to a loop for jump
         loop {
             //while curr_frame.lasti < curr_frame.code.co_code.len() {
-            //let op_code = frame.get_next_opcode();
-            let curr_frame = self.frames.last_mut().unwrap();
-            let op_code = &curr_frame.code.co_code[curr_frame.lasti].clone();
-            curr_frame.lasti += 1;
+            let op_code = {
+                let curr_frame = self.frames.last_mut().unwrap();
+                let op_code = curr_frame.code.co_code[curr_frame.lasti].clone();
+                curr_frame.lasti += 1;
+                op_code
+            };
             let why = self.dispatch(op_code);
             /*if curr_frame.blocks.len() > 0 {
               self.manage_block_stack(&why);
@@ -197,7 +199,7 @@ impl VirtualMachine {
         self.curr_frame().stack.push(val);
     }
 
-    fn dispatch(&mut self, op_code: &(usize, String, Option<usize>)) -> Option<String> {
+    fn dispatch(&mut self, op_code: (usize, String, Option<usize>)) -> Option<String> {
         let curr_frame = self.frames.last_mut().unwrap();
         debug!("stack:{:?}", curr_frame.stack);
         debug!("env  :{:?}", curr_frame.locals);
