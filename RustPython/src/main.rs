@@ -130,6 +130,7 @@ impl VirtualMachine {
     // Can we get rid of the code paramter?
 
     fn make_frame(&self, code: PyCodeObject) -> Frame{
+        // accept callargs as arguments
         //populate the globals and locals
         let mut labels = HashMap::new();
         let mut curr_offset = 0;
@@ -141,6 +142,7 @@ impl VirtualMachine {
             code: code,
             stack: vec![],
             blocks: vec![],
+            // save the callargs as locals
             locals: HashMap::new(),
             labels: labels,
             lasti: 0,
@@ -547,7 +549,29 @@ impl VirtualMachine {
                 None
             },
             ("CALL_FUNCTION", Some(argc)) => {
+                let kw_count = (argc >> 8) as u8;
+                let pos_count = (argc & 0xFF) as u8;
                 // Pop the arguments based on argc
+                let mut kw_args = HashMap::new();
+                let mut pos_args = Vec::new();
+                {
+                    let curr_frame = self.curr_frame();
+                    for _ in 0..kw_count {
+                        let native_val = curr_frame.stack.pop().unwrap();
+                        let native_key = curr_frame.stack.pop().unwrap();
+                        if let (val, NativeType::Str(key)) = (native_val, native_key) {
+
+                            kw_args.insert(key, val);
+                        }
+                        else {
+                            panic!("Incorrect type found while building keyword argument list")
+                        }
+                    }
+                    for _ in 0..pos_count {
+                        pos_args.push(curr_frame.stack.pop().unwrap());
+                    }
+                }
+
                 let func = {
                     match self.curr_frame().stack.pop().unwrap() {
                         NativeType::Function(func) => func,
@@ -556,6 +580,7 @@ impl VirtualMachine {
                 };
                 // pop argc arguments
                 // argument: name, args, globals
+                // build the callargs hashmap
                 let return_value = {
                     let frame = self.make_frame(func.code);
                     self.run_frame(frame)
@@ -599,7 +624,8 @@ impl VirtualMachine {
 struct PyCodeObject {
     co_consts: Vec<NativeType>,
     co_names: Vec<String>,
-    co_code: Vec<(usize, String, Option<usize>)> //size, name, args
+    co_code: Vec<(usize, String, Option<usize>)>, //size, name, args
+    co_varnames: Vec<String>,
 }
 
 

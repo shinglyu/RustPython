@@ -17,7 +17,8 @@ def serialize_code(code):
             "co_consts": consts_to_rust_enum(c.consts),
             "co_names": c.names,
             "co_name": c.name,
-            "co_code": parse_co_code_to_str(c)
+            "co_code": parse_co_code_to_str(c),
+            "co_varnames": c.varnames
         }
     )
 
