@@ -60,7 +60,7 @@ struct Frame {
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
-    why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
+    //why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 }
 
@@ -76,12 +76,6 @@ impl Frame {
         }
         last_offset
     }
-
-    fn get_next_opcode(&mut self) -> &(usize, String, Option<usize>){
-        self.lasti += 1; // Let's increment here, so if we use jump it will be overrided
-        &self.code.co_code[self.lasti]
-    }
-
 }
 
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -95,13 +89,6 @@ impl Function {
             code: code
         }
     }
-
-    /*
-    fn __call__(&mut self) {
-        let frame = self.vm.make_frame(self.code.clone()); //Needless clone
-        self.vm.run_frame(frame) // Return value?
-    }
-    */
 }
 
 
@@ -124,6 +111,7 @@ impl VirtualMachine {
         self.frames.pop().unwrap();
     }
 
+    /*
     fn unwind(&mut self, reason: String) {
         let curr_frame = self.curr_frame();
         let curr_block = curr_frame.blocks[curr_frame.blocks.len()-1].clone(); // use last?
@@ -139,6 +127,7 @@ impl VirtualMachine {
             _ => panic!("block stack operation not implemented")
         }
     }
+    */
 
 
     // Can we get rid of the code paramter?
@@ -159,13 +148,13 @@ impl VirtualMachine {
             labels: labels,
             lasti: 0,
             return_value: NativeType::NoneType,
-            why: "none".to_string(),
+            //why: "none".to_string(),
         }
     }
 
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn run_frame(&mut self, mut frame: Frame) -> NativeType {
+    fn run_frame(&mut self, frame: Frame) -> NativeType {
         self.frames.push(frame);
 
         //let mut why = None;
@@ -196,13 +185,9 @@ impl VirtualMachine {
     }
 
     fn run_code(&mut self, code: PyCodeObject) {
-        let mut frame = self.make_frame(code);
+        let frame = self.make_frame(code);
         self.run_frame(frame);
         // check if there are any leftover frame, fail if any
-    }
-
-    fn push_to_stack(&mut self, val: NativeType) {
-        self.curr_frame().stack.push(val);
     }
 
     fn dispatch(&mut self, op_code: (usize, String, Option<usize>)) -> Option<String> {
@@ -248,7 +233,7 @@ impl VirtualMachine {
             ("BUILD_LIST", Some(count)) => {
                 let curr_frame = self.curr_frame();
                 let mut vec = vec!();
-                for i in 0..count {
+                for _ in 0..count {
                     vec.push(curr_frame.stack.pop().unwrap());
                 }
                 vec.reverse();
