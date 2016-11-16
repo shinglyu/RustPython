@@ -25,7 +25,7 @@ enum NativeType{
     List(Vec<NativeType>),
     Tuple(Vec<NativeType>),
     Iter(Vec<NativeType>), // TODO: use Iterator instead
-    Code(PyCodeObject)
+    Code(PyCodeObject),
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -83,25 +83,24 @@ impl Frame {
 
 }
 
-/*
-struct Function {
-    vm: &VirtualMachine,
+struct Function<'a> {
+    vm: &'a mut  VirtualMachine,
     code: PyCodeObject
 }
 
-impl Function {
-    fn new(vm: &VirtualMachine, Code) -> Function {
+impl<'a>  Function<'a> {
+    fn new(vm: &mut VirtualMachine, code: PyCodeObject) -> Function {
         Function {
             vm: vm,
-            code:
+            code: code
         }
     }
 
-    fn __call__() {
-
+    fn __call__(&mut self) {
+        let frame = self.vm.make_frame(self.code.clone()); //Needless clone
+        self.vm.run_frame(frame) // Return value?
     }
 }
-*/
 
 
 struct VirtualMachine{
@@ -515,6 +514,19 @@ impl VirtualMachine {
             },
             ("PRINT_NEWLINE", None) => {
                 print!("\n");
+                None
+            },
+            ("MAKE_FUNCTION", Some(argc)) => {
+                // https://docs.python.org/3.4/library/dis.html#opcode-MAKE_FUNCTION
+                let qualified_name = curr_frame.stack.pop().unwrap();
+                let code_obj = match curr_frame.stack.pop().unwrap() {
+                    NativeType::Code(code) => code,
+                    _ => panic!("Second item on the stack should be a code object")
+                };
+                // pop argc arguments
+                // argument: name, args, globals
+                let func = Function::new(&mut self, code_obj);
+                curr_frame.stack.push(func);
                 None
             },
             ("RETURN_VALUE", None) => {
