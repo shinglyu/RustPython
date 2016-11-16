@@ -60,7 +60,7 @@ struct Frame {
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
-    //why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
+    why: String, //Not sure why we need this //Maybe use a enum if we have fininte options
     // cmp_op: Vec<&'a Fn(NativeType, NativeType) -> bool>, // TODO: change compare to a function list
 }
 
@@ -111,11 +111,10 @@ impl VirtualMachine {
         self.frames.pop().unwrap();
     }
 
-    /*
     fn unwind(&mut self, reason: String) {
         let curr_frame = self.curr_frame();
         let curr_block = curr_frame.blocks[curr_frame.blocks.len()-1].clone(); // use last?
-        curr_frame.why = reason;
+        curr_frame.why = reason; // Why do we need this?
         debug!("block status: {:?}, {:?}", curr_block.block_type, curr_frame.why);
         match (curr_block.block_type.as_ref(), curr_frame.why.as_ref()) {
             ("loop", "break") => {
@@ -127,8 +126,6 @@ impl VirtualMachine {
             _ => panic!("block stack operation not implemented")
         }
     }
-    */
-
 
     // Can we get rid of the code paramter?
 
@@ -148,7 +145,7 @@ impl VirtualMachine {
             labels: labels,
             lasti: 0,
             return_value: NativeType::NoneType,
-            //why: "none".to_string(),
+            why: "none".to_string(),
         }
     }
 
@@ -351,7 +348,8 @@ impl VirtualMachine {
             },
             ("BREAK_LOOP", None) => {
                 // Do we still need to return the why if we use unwind from jsapy?
-                Some("break".to_string()) 
+                self.unwind("break".to_string());
+                None //?
             },
             ("RAISE_VARARGS", Some(argc)) => {
                 let curr_frame = self.curr_frame();
