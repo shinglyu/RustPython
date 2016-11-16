@@ -26,6 +26,7 @@ enum NativeType{
     Tuple(Vec<NativeType>),
     Iter(Vec<NativeType>), // TODO: use Iterator instead
     Code(PyCodeObject),
+    Function(Function),
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -83,23 +84,24 @@ impl Frame {
 
 }
 
-struct Function<'a> {
-    vm: &'a mut  VirtualMachine,
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
+struct Function {
     code: PyCodeObject
 }
 
-impl<'a>  Function<'a> {
-    fn new(vm: &mut VirtualMachine, code: PyCodeObject) -> Function {
+impl Function {
+    fn new(code: PyCodeObject) -> Function {
         Function {
-            vm: vm,
             code: code
         }
     }
 
+    /*
     fn __call__(&mut self) {
         let frame = self.vm.make_frame(self.code.clone()); //Needless clone
         self.vm.run_frame(frame) // Return value?
     }
+    */
 }
 
 
@@ -163,7 +165,7 @@ impl VirtualMachine {
 
     // The Option<i32> is the return value of the frame, remove when we have implemented frame
     // TODO: read the op codes directly from the internal code object
-    fn run_frame(&mut self, mut frame: Frame){
+    fn run_frame(&mut self, mut frame: Frame) -> NativeType {
         self.frames.push(frame);
 
         //let mut why = None;
@@ -171,7 +173,7 @@ impl VirtualMachine {
         loop {
             //while curr_frame.lasti < curr_frame.code.co_code.len() {
             let op_code = {
-                let curr_frame = self.frames.last_mut().unwrap();
+                let curr_frame = self.curr_frame();
                 let op_code = curr_frame.code.co_code[curr_frame.lasti].clone();
                 curr_frame.lasti += 1;
                 op_code
@@ -185,7 +187,12 @@ impl VirtualMachine {
                 break;
             }
         }
+        let return_value = {
+            //let curr_frame = self.frames.last_mut().unwrap();
+            self.curr_frame().return_value.clone()
+        };
         self.pop_frame();
+        return_value
     }
 
     fn run_code(&mut self, code: PyCodeObject) {
@@ -199,29 +206,33 @@ impl VirtualMachine {
     }
 
     fn dispatch(&mut self, op_code: (usize, String, Option<usize>)) -> Option<String> {
-        let curr_frame = self.frames.last_mut().unwrap();
-        debug!("stack:{:?}", curr_frame.stack);
-        debug!("env  :{:?}", curr_frame.locals);
-        debug!("Executing op code: {:?}", op_code);
+        {
+            debug!("stack:{:?}", self.curr_frame().stack);
+            debug!("env  :{:?}", self.curr_frame().locals);
+            debug!("Executing op code: {:?}", op_code);
+        }
         match (op_code.1.as_ref(), op_code.2){
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
+                let curr_frame = self.curr_frame();
                 curr_frame.stack.push(curr_frame.code.co_consts[consti].clone());
                 None
             },
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
-                curr_frame.stack.push(NativeType::NoneType);
+                self.curr_frame().stack.push(NativeType::NoneType);
                 None
             },
             ("STORE_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
+                let curr_frame = self.curr_frame();
                 curr_frame.locals.insert(curr_frame.code.co_names[namei].clone(), curr_frame.stack.pop().unwrap());
                 None
             },
             ("LOAD_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
+                let curr_frame = self.curr_frame();
                 curr_frame.stack.push(curr_frame.locals.get::<str>(&curr_frame.code.co_names[namei]).unwrap().clone());
                 None
             },
@@ -229,11 +240,13 @@ impl VirtualMachine {
                 // We need to load the underlying value the name points to, but stuff like
                 // AssertionError is in the names right after compile, so we load the string
                 // instead for now
+                let curr_frame = self.curr_frame();
                 curr_frame.stack.push(NativeType::Str(curr_frame.code.co_names[namei].to_string()));
                 None
             },
 
             ("BUILD_LIST", Some(count)) => {
+                let curr_frame = self.curr_frame();
                 let mut vec = vec!();
                 for i in 0..count {
                     vec.push(curr_frame.stack.pop().unwrap());
@@ -244,6 +257,7 @@ impl VirtualMachine {
             },
 
             ("GET_ITER", None) => {
+                let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let iter = match tos {
                     // Return a Iterator instead              vvv
@@ -256,6 +270,7 @@ impl VirtualMachine {
 
             ("FOR_ITER", Some(delta)) => {
                 // This function should be rewrote to use Rust native iterator
+                let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let result = match tos {
                     NativeType::Iter(v) =>  {
@@ -284,6 +299,7 @@ impl VirtualMachine {
             },
 
             ("COMPARE_OP", Some(cmp_op_i)) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match CMP_OP[cmp_op_i] {
@@ -320,6 +336,7 @@ impl VirtualMachine {
                 
             },
             ("POP_JUMP_IF_TRUE", Some(ref target)) => {
+                let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
                 if v == NativeType::Boolean(true) {
                     curr_frame.lasti = curr_frame.labels.get(target).unwrap().clone();
@@ -328,6 +345,7 @@ impl VirtualMachine {
 
             }
             ("POP_JUMP_IF_FALSE", Some(ref target)) => {
+                let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
                 if v == NativeType::Boolean(false) {
                     curr_frame.lasti = curr_frame.labels.get(target).unwrap().clone();
@@ -336,11 +354,13 @@ impl VirtualMachine {
                 
             }
             ("JUMP_FORWARD", Some(ref delta)) => {
+                let curr_frame = self.curr_frame();
                 let last_offset = curr_frame.get_bytecode_offset().unwrap();
                 curr_frame.lasti = curr_frame.labels.get(&(last_offset + delta)).unwrap().clone();
                 None
             },
             ("JUMP_ABSOLUTE", Some(ref target)) => {
+                let curr_frame = self.curr_frame();
                 curr_frame.lasti = curr_frame.labels.get(target).unwrap().clone();
                 None
             },
@@ -349,6 +369,7 @@ impl VirtualMachine {
                 Some("break".to_string()) 
             },
             ("RAISE_VARARGS", Some(argc)) => {
+                let curr_frame = self.curr_frame();
                 // let (exception, params, traceback) = match argc {
                 let exception = match argc {
                     1 => curr_frame.stack.pop().unwrap(),
@@ -358,6 +379,7 @@ impl VirtualMachine {
                 panic!("{:?}", exception);
             }
             ("INPLACE_ADD", None) => {
+                let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
                 match (tos, tos1) {
@@ -370,6 +392,7 @@ impl VirtualMachine {
             },
 
             ("BINARY_ADD", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -394,6 +417,7 @@ impl VirtualMachine {
                 None
             },
             ("BINARY_POWER", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -414,6 +438,7 @@ impl VirtualMachine {
                 None
             },
             ("BINARY_MULTIPLY", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -437,6 +462,7 @@ impl VirtualMachine {
                 None
             },
             ("BINARY_TRUE_DIVIDE", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -448,6 +474,7 @@ impl VirtualMachine {
                 None
             },
             ("BINARY_MODULO", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -459,6 +486,7 @@ impl VirtualMachine {
                 None
             },
             ("BINARY_SUBTRACT", None) => {
+                let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
                 match (v1, v2) {
@@ -471,6 +499,7 @@ impl VirtualMachine {
             },
 
             ("BINARY_SUBSCR", None) => {
+                let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
                 if let (NativeType::List(v), NativeType::Int(idx)) = (tos1, tos) {
@@ -485,6 +514,7 @@ impl VirtualMachine {
                 None
             },
             ("ROT_TWO", None) => {
+                let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
                 curr_frame.stack.push(tos);
@@ -492,6 +522,7 @@ impl VirtualMachine {
                 None
             }
             ("UNARY_NEGATIVE", None) => {
+                let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
                 match v {
                     NativeType::Int(v1i) => {
@@ -502,12 +533,14 @@ impl VirtualMachine {
                 None
             },
             ("UNARY_POSITIVE", None) => {
+                let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
                 // Any case that is not just push back?
                 curr_frame.stack.push(v);
                 None
             },
             ("PRINT_ITEM", None) => {
+                let curr_frame = self.curr_frame();
                 // TODO: Print without the (...)
                 println!("{:?}", curr_frame.stack.pop().unwrap());
                 None
@@ -518,6 +551,7 @@ impl VirtualMachine {
             },
             ("MAKE_FUNCTION", Some(argc)) => {
                 // https://docs.python.org/3.4/library/dis.html#opcode-MAKE_FUNCTION
+                let curr_frame = self.curr_frame();
                 let qualified_name = curr_frame.stack.pop().unwrap();
                 let code_obj = match curr_frame.stack.pop().unwrap() {
                     NativeType::Code(code) => code,
@@ -525,17 +559,35 @@ impl VirtualMachine {
                 };
                 // pop argc arguments
                 // argument: name, args, globals
-                let func = Function::new(&mut self, code_obj);
-                curr_frame.stack.push(func);
+                let func = Function::new(code_obj);
+                curr_frame.stack.push(NativeType::Function(func));
+                None
+            },
+            ("CALL_FUNCTION", Some(argc)) => {
+                // Pop the arguments based on argc
+                let func = {
+                    match self.curr_frame().stack.pop().unwrap() {
+                        NativeType::Function(func) => func,
+                        _ => panic!("The item on the stack should be a code object")
+                    }
+                };
+                // pop argc arguments
+                // argument: name, args, globals
+                let return_value = {
+                    let frame = self.make_frame(func.code);
+                    self.run_frame(frame)
+                };
+                self.curr_frame().stack.push(return_value);
                 None
             },
             ("RETURN_VALUE", None) => {
                 // Hmmm... what is this used?
                 // I believe we need to push this to the next frame
-                curr_frame.return_value = curr_frame.stack.pop().unwrap();
+                self.curr_frame().return_value = self.curr_frame().stack.pop().unwrap();
                 Some("return".to_string())
             },
             ("SETUP_LOOP", Some(delta)) => {
+                let curr_frame = self.curr_frame();
                 let curr_offset = curr_frame.get_bytecode_offset().unwrap();
                 curr_frame.blocks.push(Block {
                     block_type: "loop".to_string(),
@@ -544,7 +596,7 @@ impl VirtualMachine {
                 None
             },
             ("POP_BLOCK", None) => {
-                curr_frame.blocks.pop();
+                self.curr_frame().blocks.pop();
                 None
             }
             ("SetLineno", _) | ("LABEL", _)=> {
