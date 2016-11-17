@@ -8,6 +8,10 @@ source venv/bin/activate
 unexpected_count=0
 expected_count=0
 fail_titles=$""
+
+RED='\033[0;31m'
+NC='\033[0m' # No Color
+
 for TESTCASE in $(find tests -name \*.py -print)
 do
   echo "TEST START: ${TESTCASE}"
@@ -30,22 +34,21 @@ do
       echo "== FAIL as expected  =="
       let expected_count=expected_count+1
     else
-      echo "== expect PASS, found FAIL =="
+      printf "${RED}== FAIL, expected PASS ==${NC}\n"
       let unexpected_count=unexpected_count+1
-      fail_titles=$"${fail_titles}\n${TESTCASE}\texpected PASS, found FAIL"
+      fail_titles=$"${fail_titles}\n${TESTCASE}\t${RED}FAIL${NC} (expected PASS)"
     fi
   else
     if [ "${xfail}" = true ]; then
-      echo "== expect FAIL, found PASS=="
+      printf "${RED}== PASS, expected FAIL ==${NC}\n"
       let unexpected_count=unexpected_count+1
       let unexpected_count=unexpected_count+1
-      fail_titles=$"${fail_titles}\n${TESTCASE}\texpect FAIL, found PASS"
+      fail_titles=$"${fail_titles}\n${TESTCASE}\t${RED}PASS${NC} (expected FAIL)"
     else
-      echo "== OK as expected  =="
+      echo "== PASS as expected  =="
       let expected_count=expected_count+1
     fi
   fi
-  echo "${fail_titles}"
   cd ..
   echo "--------------------------------"
 
@@ -53,7 +56,8 @@ done
 
 echo "Summary"
 echo "================"
-echo "${unexpected_count} unexpected, ${expected_count} expected"
+printf "${RED}${unexpected_count} unexpected${NC}, ${expected_count} expected"
+echo ""
 echo ""
 echo "unexpected results:"
 printf "${fail_titles}"
