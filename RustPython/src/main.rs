@@ -587,6 +587,7 @@ impl VirtualMachine {
                 // pop argc arguments
                 // argument: name, args, globals
                 // build the callargs hashmap
+                pos_args.reverse();
                 let mut callargs = HashMap::new();
                 for (name, val) in func.code.co_varnames.iter().zip(pos_args) {
                     callargs.insert(name.to_string(), val);

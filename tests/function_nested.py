@@ -1,3 +1,4 @@
+# Blocked on LOAD_GLOBAL
 def sum(x,y):
     return x+y
 
