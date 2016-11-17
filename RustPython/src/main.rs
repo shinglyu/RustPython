@@ -129,8 +129,7 @@ impl VirtualMachine {
 
     // Can we get rid of the code paramter?
 
-    fn make_frame(&self, code: PyCodeObject) -> Frame{
-        // accept callargs as arguments
+    fn make_frame(&self, code: PyCodeObject, callargs: HashMap<String, NativeType>) -> Frame {
         //populate the globals and locals
         let mut labels = HashMap::new();
         let mut curr_offset = 0;
@@ -143,7 +142,7 @@ impl VirtualMachine {
             stack: vec![],
             blocks: vec![],
             // save the callargs as locals
-            locals: HashMap::new(),
+            locals: callargs,
             labels: labels,
             lasti: 0,
             return_value: NativeType::NoneType,
@@ -184,7 +183,7 @@ impl VirtualMachine {
     }
 
     fn run_code(&mut self, code: PyCodeObject) {
-        let frame = self.make_frame(code);
+        let frame = self.make_frame(code, HashMap::new());
         self.run_frame(frame);
         // check if there are any leftover frame, fail if any
     }
@@ -206,6 +205,13 @@ impl VirtualMachine {
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
                 self.curr_frame().stack.push(NativeType::NoneType);
+                None
+            },
+            ("LOAD_FAST", Some(var_num)) => {
+                // println!("Loading const at index: {}", consti);
+                let curr_frame = self.curr_frame();
+                let ref name = curr_frame.code.co_varnames[var_num];
+                curr_frame.stack.push(curr_frame.locals.get::<str>(name).unwrap().clone());
                 None
             },
             ("STORE_NAME", Some(namei)) => {
@@ -581,8 +587,13 @@ impl VirtualMachine {
                 // pop argc arguments
                 // argument: name, args, globals
                 // build the callargs hashmap
+                let mut callargs = HashMap::new();
+                for (name, val) in func.code.co_varnames.iter().zip(pos_args) {
+                    callargs.insert(name.to_string(), val);
+                }
+                // merge callargs with kw_args
                 let return_value = {
-                    let frame = self.make_frame(func.code);
+                    let frame = self.make_frame(func.code, callargs);
                     self.run_frame(frame)
                 };
                 self.curr_frame().stack.push(return_value);
