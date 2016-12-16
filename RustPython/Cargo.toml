@@ -6,6 +6,8 @@ authors = ["Shing Lyu <shing.lyu@gmail.com>"]
 [dependencies]
 log = "0.3"
 env_logger = "0.3"
-serde = "0.8"
-serde_derive = "0.8"
+#serde = "0.8"
+#serde_derive = "0.8"
+serde = {path = "../../serde/serde"}
+serde_derive = {path = "../../serde/serde_derive"}
 serde_json = "0.8"

@@ -38,3 +38,7 @@ cargo run ../test.bytecode
 * Runs the [pybenchmark](https://pybenchmarks.org/) benchmark test
 * Run famous/popular python modules (which?)
 * Compatible with CPython 2.7
+
+# Versions
+rustc 1.15.0-nightly (daf8c1dfc 2016-12-05)
+

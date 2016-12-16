@@ -27,12 +27,10 @@ enum NativeType{
     Iter(Vec<NativeType>), // TODO: use Iterator instead
     Code(PyCodeObject),
     Function(Function),
+    #[serde(skip_deserializing)]
     NativeFunction(fn(Vec<NativeType>) -> NativeType ),
 }
 
-impl Serialize for NativeType::NativeFunction {
-
-}
 
 const CMP_OP: &'static [&'static str] = &[">",
                                           "<=",
