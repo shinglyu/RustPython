@@ -208,10 +208,15 @@ impl VirtualMachine {
                 curr_frame.stack.push(curr_frame.code.co_consts[consti].clone());
                 None
             },
+
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
                 self.curr_frame().stack.push(NativeType::NoneType);
+                None
+            },
+            ("POP_TOP", None) => {
+                self.curr_frame().stack.pop();
                 None
             },
             ("LOAD_FAST", Some(var_num)) => {
