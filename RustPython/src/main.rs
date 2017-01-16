@@ -14,8 +14,10 @@ use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 
+mod builtins;
+
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-enum NativeType{
+pub enum NativeType{
     NoneType,
     Boolean(bool),
     Int(i32),
@@ -81,7 +83,7 @@ impl Frame {
 }
 
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
-struct Function {
+pub struct Function {
     code: PyCodeObject
 }
 
@@ -139,12 +141,15 @@ impl VirtualMachine {
             labels.insert(curr_offset, idx);
             curr_offset += op.0;
         }
+        //TODO: move this into the __builtin__ module when we have a module type
+        let mut locals = callargs;
+        locals.insert("print".to_string(), NativeType::NativeFunction(builtins::print));
         Frame {
             code: code,
             stack: vec![],
             blocks: vec![],
             // save the callargs as locals
-            locals: callargs,
+            locals: locals,
             labels: labels,
             lasti: 0,
             return_value: NativeType::NoneType,
@@ -582,24 +587,29 @@ impl VirtualMachine {
 
                 let func = {
                     match self.curr_frame().stack.pop().unwrap() {
-                        NativeType::Function(func) => func,
+                        NativeType::Function(func) => {
+                            // pop argc arguments
+                            // argument: name, args, globals
+                            // build the callargs hashmap
+                            pos_args.reverse();
+                            let mut callargs = HashMap::new();
+                            for (name, val) in func.code.co_varnames.iter().zip(pos_args) {
+                                callargs.insert(name.to_string(), val);
+                            }
+                            // merge callargs with kw_args
+                            let return_value = {
+                                let frame = self.make_frame(func.code, callargs);
+                                self.run_frame(frame)
+                            };
+                            self.curr_frame().stack.push(return_value);
+                        },
+                        NativeType::NativeFunction(func) => {
+                            pos_args.reverse();
+                            func(pos_args);
+                        },
                         _ => panic!("The item on the stack should be a code object")
                     }
                 };
-                // pop argc arguments
-                // argument: name, args, globals
-                // build the callargs hashmap
-                pos_args.reverse();
-                let mut callargs = HashMap::new();
-                for (name, val) in func.code.co_varnames.iter().zip(pos_args) {
-                    callargs.insert(name.to_string(), val);
-                }
-                // merge callargs with kw_args
-                let return_value = {
-                    let frame = self.make_frame(func.code, callargs);
-                    self.run_frame(frame)
-                };
-                self.curr_frame().stack.push(return_value);
                 None
             },
             ("RETURN_VALUE", None) => {
@@ -635,7 +645,7 @@ impl VirtualMachine {
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]
-struct PyCodeObject {
+pub struct PyCodeObject {
     co_consts: Vec<NativeType>,
     co_names: Vec<String>,
     co_code: Vec<(usize, String, Option<usize>)>, //size, name, args
