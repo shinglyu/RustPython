@@ -142,6 +142,7 @@ impl VirtualMachine {
         //TODO: move this into the __builtin__ module when we have a module type
         let mut locals = callargs;
         locals.insert("print".to_string(), NativeType::NativeFunction(builtins::print));
+        locals.insert("len".to_string(), NativeType::NativeFunction(builtins::len));
         Frame {
             code: code,
             stack: vec![],
@@ -613,7 +614,8 @@ impl VirtualMachine {
                         },
                         NativeType::NativeFunction(func) => {
                             pos_args.reverse();
-                            func(pos_args);
+                            let return_value = func(pos_args);
+                            self.curr_frame().stack.push(return_value);
                         },
                         _ => panic!("The item on the stack should be a code object")
                     }
