@@ -233,7 +233,12 @@ impl VirtualMachine {
             ("LOAD_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
                 let curr_frame = self.curr_frame();
-                curr_frame.stack.push(curr_frame.locals.get::<str>(&curr_frame.code.co_names[namei]).unwrap().clone());
+                if let Some(code) = curr_frame.locals.get::<str>(&curr_frame.code.co_names[namei]) {
+                    curr_frame.stack.push(code.clone());
+                }
+                else {
+                    panic!("Can't find symbol {:?} in the current frame", &curr_frame.code.co_names[namei]);
+                }
                 None
             },
             ("LOAD_GLOBAL", Some(namei)) => {
