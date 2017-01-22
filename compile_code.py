@@ -28,7 +28,10 @@ def consts_to_rust_enum(consts):
         return s[0].upper() + s[1:]
 
     def const_to_rust_enum(const):
-        return {capitalize_first(str(type(const).__name__)): const}
+        if type(const).__name__ == "tuple":
+            return {capitalize_first(str(type(const).__name__)): list(map(const_to_rust_enum, const))}
+        else:
+            return {capitalize_first(str(type(const).__name__)): const}
     return list(map(const_to_rust_enum, consts))
 
 

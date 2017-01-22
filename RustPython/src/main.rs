@@ -142,6 +142,7 @@ impl VirtualMachine {
         //TODO: move this into the __builtin__ module when we have a module type
         let mut locals = callargs;
         locals.insert("print".to_string(), NativeType::NativeFunction(builtins::print));
+        locals.insert("len".to_string(), NativeType::NativeFunction(builtins::len));
         Frame {
             code: code,
             stack: vec![],
@@ -233,7 +234,12 @@ impl VirtualMachine {
             ("LOAD_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
                 let curr_frame = self.curr_frame();
-                curr_frame.stack.push(curr_frame.locals.get::<str>(&curr_frame.code.co_names[namei]).unwrap().clone());
+                if let Some(code) = curr_frame.locals.get::<str>(&curr_frame.code.co_names[namei]) {
+                    curr_frame.stack.push(code.clone());
+                }
+                else {
+                    panic!("Can't find symbol {:?} in the current frame", &curr_frame.code.co_names[namei]);
+                }
                 None
             },
             ("LOAD_GLOBAL", Some(namei)) => {
@@ -503,14 +509,10 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
-                if let (NativeType::List(v), NativeType::Int(idx)) = (tos1, tos) {
-                    if idx as usize >= v.len() {
-                        // TODO: change this to a exception
-                        panic!("IndexError: list index out of range");
-                    }
-                    curr_frame.stack.push(v[idx as usize].clone());
-                } else {
-                    panic!("TypeError in BINARY_SUBSTRACT");
+                match (&tos1, &tos) {
+                    (&NativeType::List(ref l), &NativeType::Int(ref index)) => curr_frame.stack.push(l[*index as usize].clone()),
+                    (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(t[*index as usize].clone()),
+                    _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported", tos1, tos)
                 };
                 None
             },
@@ -608,7 +610,8 @@ impl VirtualMachine {
                         },
                         NativeType::NativeFunction(func) => {
                             pos_args.reverse();
-                            func(pos_args);
+                            let return_value = func(pos_args);
+                            self.curr_frame().stack.push(return_value);
                         },
                         _ => panic!("The item on the stack should be a code object")
                     }
@@ -743,13 +746,17 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).unwrap();
     // println!("Read string");
-    let code: PyCodeObject = serde_json::from_str(&s).unwrap();
+    let code: PyCodeObject = match serde_json::from_str(&s) {
+        Ok(c) => c,
+        Err(_) => panic!("Fail to parse the bytecode")
+    };
 
     let mut vm = VirtualMachine::new();
     vm.run_code(code);
     // println!("Done");
 }
 
+/*
 #[test]
 fn test_parse_native_type() {
 
@@ -852,4 +859,11 @@ let input = "{\"co_consts\":[{\"Int\":1},\"NoneType\",{\"Int\":2}],\"co_names\":
 
     let deserialized: PyCodeObject = serde_json::from_str(&input).unwrap();
     assert_eq!(expected, deserialized)
+}
+*/
+
+#[test]
+fn test_tuple_serialization(){
+    let tuple = NativeType::Tuple(vec![NativeType::Int(1),NativeType::Int(2)]);
+    println!("{}", serde_json::to_string(&tuple).unwrap());
 }

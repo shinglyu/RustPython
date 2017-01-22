@@ -28,7 +28,7 @@ echo "${MODE}"
 case "${MODE}" in 
   "run" )
     cd RustPython 
-    cargo run "../${TMP_FILE}"
+    RUST_BACKTRACE=1 cargo run "../${TMP_FILE}"
     ;;
   "view_bytecode" )
     cat "${TMP_FILE}" | python -m json.tool

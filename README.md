@@ -13,6 +13,13 @@ pip install bytecode
 
 # Run
 
+```
+./test.sh <path/to/file.py> # compile and run
+./test.sh --bytecode <path/to/file.py> # print the bytecode
+./test.sh --dis <path/to/file.py> # Run python -m dis
+```
+
+## Manual
 Given a python file `test.py`
 
 ```
@@ -20,6 +27,18 @@ python compile_code.py test.py > test.bytecode
 
 cd RustPython
 cargo run ../test.bytecode 
+```
+
+# Testing & debugging
+
+```
+./test_all.sh
+```
+
+## Logging
+
+```
+RUST_LOG=debug ./tests_all.sh
 ```
 
 # TODOs
@@ -37,6 +56,7 @@ cargo run ../test.bytecode
 * Support all builtin functions
 * Runs the [pybenchmark](https://pybenchmarks.org/) benchmark test
 * Run famous/popular python modules (which?)
+
 * Compatible with CPython 2.7
 
 # Rust version
