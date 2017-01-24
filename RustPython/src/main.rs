@@ -311,25 +311,28 @@ impl VirtualMachine {
                 match CMP_OP[cmp_op_i] {
                     // To avoid branch explotion, use an array of callables instead
                     "==" => {
-                        match (v1, v2) {
-                            (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                        match (&v1, &v2) {
+                            (&NativeType::Int(ref v1i), &NativeType::Int(ref v2i)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2i == v1i));
                             },
-                            (NativeType::Float(v1f), NativeType::Float(v2f)) => {
+                            (&NativeType::Float(ref v1f), &NativeType::Float(ref v2f)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2f == v1f));
                             },
-                            (NativeType::Str(v1s), NativeType::Str(v2s)) => {
+                            (&NativeType::Str(ref v1s), &NativeType::Str(ref v2s)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2s == v1s));
                             },
-                            _ => panic!("TypeError in COMPARE_OP")
+                            (&NativeType::Int(ref v1i), &NativeType::Float(ref v2f)) => {
+                                curr_frame.stack.push(NativeType::Boolean(v2f == &(*v1i as f64)));
+                            },
+                            _ => panic!("TypeError in COMPARE_OP: can't compare {:?} with {:?}", v1, v2)
                         };
                     }
                     ">" => {
-                        match (v1, v2) {
-                            (NativeType::Int(v1i), NativeType::Int(v2i)) => {
+                        match (&v1, &v2) {
+                            (&NativeType::Int(ref v1i), &NativeType::Int(ref v2i)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2i < v1i));
                             },
-                            (NativeType::Float(v1f), NativeType::Float(v2f)) => {
+                            (&NativeType::Float(ref v1f), &NativeType::Float(ref v2f)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2f < v1f));
                             },
                             _ => panic!("TypeError in COMPARE_OP")
