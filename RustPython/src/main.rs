@@ -58,6 +58,7 @@ struct Frame {
     // We need 1 stack per frame
     stack: Vec<NativeType>,   // The main data frame of the stack machine
     blocks: Vec<Block>,  // Block frames, for controling loops and exceptions
+    globals: HashMap<String, NativeType>, // Variables
     locals: HashMap<String, NativeType>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
@@ -131,7 +132,7 @@ impl VirtualMachine {
 
     // Can we get rid of the code paramter?
 
-    fn make_frame(&self, code: PyCodeObject, callargs: HashMap<String, NativeType>) -> Frame {
+    fn make_frame(&self, code: PyCodeObject, callargs: HashMap<String, NativeType>, globals: Option<HashMap<String, NativeType>>) -> Frame {
         //populate the globals and locals
         let mut labels = HashMap::new();
         let mut curr_offset = 0;
@@ -139,8 +140,15 @@ impl VirtualMachine {
             labels.insert(curr_offset, idx);
             curr_offset += op.0;
         }
+        //TODO: This is wrong, check https://github.com/nedbat/byterun/blob/31e6c4a8212c35b5157919abff43a7daa0f377c6/byterun/pyvm2.py#L95
+        let globals = match globals {
+            Some(g) => g,
+            None => HashMap::new(),
+        };
+        let mut locals = globals;
+        locals.extend(callargs);
+
         //TODO: move this into the __builtin__ module when we have a module type
-        let mut locals = callargs;
         locals.insert("print".to_string(), NativeType::NativeFunction(builtins::print));
         locals.insert("len".to_string(), NativeType::NativeFunction(builtins::len));
         Frame {
@@ -148,6 +156,7 @@ impl VirtualMachine {
             stack: vec![],
             blocks: vec![],
             // save the callargs as locals
+            globals: locals.clone(),
             locals: locals,
             labels: labels,
             lasti: 0,
@@ -189,7 +198,7 @@ impl VirtualMachine {
     }
 
     fn run_code(&mut self, code: PyCodeObject) {
-        let frame = self.make_frame(code, HashMap::new());
+        let frame = self.make_frame(code, HashMap::new(), None);
         self.run_frame(frame);
         // check if there are any leftover frame, fail if any
     }
@@ -247,7 +256,8 @@ impl VirtualMachine {
                 // AssertionError is in the names right after compile, so we load the string
                 // instead for now
                 let curr_frame = self.curr_frame();
-                curr_frame.stack.push(NativeType::Str(curr_frame.code.co_names[namei].to_string()));
+                let name = &curr_frame.code.co_names[namei];
+                curr_frame.stack.push(curr_frame.globals.get::<str>(name).unwrap().clone());
                 None
             },
 
@@ -596,6 +606,10 @@ impl VirtualMachine {
                         pos_args.push(curr_frame.stack.pop().unwrap());
                     }
                 }
+                let locals = {
+                    // FIXME: no clone here
+                    self.curr_frame().locals.clone()
+                };
 
                 let func = {
                     match self.curr_frame().stack.pop().unwrap() {
@@ -610,7 +624,7 @@ impl VirtualMachine {
                             }
                             // merge callargs with kw_args
                             let return_value = {
-                                let frame = self.make_frame(func.code, callargs);
+                                let frame = self.make_frame(func.code, callargs, Some(locals));
                                 self.run_frame(frame)
                             };
                             self.curr_frame().stack.push(return_value);
