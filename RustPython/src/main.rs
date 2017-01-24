@@ -515,6 +515,10 @@ impl VirtualMachine {
                 match (&tos1, &tos) {
                     (&NativeType::List(ref l), &NativeType::Int(ref index)) => curr_frame.stack.push(l[*index as usize].clone()),
                     (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(t[*index as usize].clone()),
+                    (&NativeType::Str(ref s), &NativeType::Int(ref index)) => {
+                        let idx = (index + s.len() as i32) % s.len() as i32;
+                        curr_frame.stack.push(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string()));
+                    },
                     _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported", tos1, tos)
                 };
                 None
