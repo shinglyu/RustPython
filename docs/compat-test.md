@@ -10,3 +10,8 @@ http://pypi-ranking.info/alltime
 http://learning-python.com/books/lp4e-examples.html
 
 https://docs.python.org/3/tutorial/introduction.html#numbers
+
+http://doc.pypy.org/en/latest/getting-started-dev.html#running-pypy-s-unit-tests
+
+CPython Regression suite
+https://github.com/python/cpython/tree/master/Lib/test
