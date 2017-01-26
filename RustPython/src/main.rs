@@ -27,6 +27,7 @@ pub enum NativeType{
     Iter(Vec<NativeType>), // TODO: use Iterator instead
     Code(PyCodeObject),
     Function(Function),
+    Slice(Option<i32>, Option<i32>, Option<i32>), // start, stop, step
     #[serde(skip_serializing, skip_deserializing)]
     NativeFunction(fn(Vec<NativeType>) -> NativeType ),
 }
@@ -269,6 +270,30 @@ impl VirtualMachine {
                 }
                 vec.reverse();
                 curr_frame.stack.push(NativeType::List(vec));
+                None
+            },
+
+            ("BUILD_SLICE", Some(count)) => {
+                let curr_frame = self.curr_frame();
+                assert!(count == 2 || count == 3);
+                let mut vec = vec!();
+                for _ in 0..count {
+                    vec.push(curr_frame.stack.pop().unwrap());
+                }
+                vec.reverse();
+                let mut out:Vec<Option<i32>> = vec.into_iter().map(|x| match x {
+                    NativeType::Int(n) => Some(n),
+                    NativeType::NoneType => None,
+                    _ => panic!("Expect Int or None as BUILD_SLICE arguments, got {:?}", x),
+                }).collect();
+
+                if out.len() == 2 {
+                    out.push(None);
+                }
+                assert!(out.len() == 3);
+                // TODO: assert the stop start and step are NativeType::Int
+                // See https://users.rust-lang.org/t/how-do-you-assert-enums/1187/8
+                curr_frame.stack.push(NativeType::Slice(out[0], out[1], out[2]));
                 None
             },
 
@@ -529,7 +554,11 @@ impl VirtualMachine {
                         let idx = (index + s.len() as i32) % s.len() as i32;
                         curr_frame.stack.push(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string()));
                     },
-                    _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported", tos1, tos)
+                    (&NativeType::Str(ref s), &NativeType::Slice(Some(ref start), Some(ref stop), None)) => {
+                        curr_frame.stack.push(NativeType::Str(s[*start as usize..*stop as usize].to_string()));
+                    },
+                    // TODO: implement other Slice possibilities
+                    _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported (yet?)", tos1, tos)
                 };
                 None
             },
@@ -663,8 +692,7 @@ impl VirtualMachine {
                 None
             },
             (name, _) => {
-                println!("Unrecongnizable op code: {}", name);
-                None
+                panic!("Unrecongnizable op code: {}", name);
             }
         }
 
