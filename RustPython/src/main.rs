@@ -554,8 +554,21 @@ impl VirtualMachine {
                         let idx = (index + s.len() as i32) % s.len() as i32;
                         curr_frame.stack.push(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string()));
                     },
-                    (&NativeType::Str(ref s), &NativeType::Slice(Some(ref start), Some(ref stop), None)) => {
-                        curr_frame.stack.push(NativeType::Str(s[*start as usize..*stop as usize].to_string()));
+                    (&NativeType::Str(ref s), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
+                        let start = match opt_start {
+                            &Some(start) => ((start + s.len() as i32) % s.len() as i32) as usize,
+                            &None => 0,
+                        };
+                        let stop = match opt_stop {
+                            &Some(stop) => ((stop + s.len() as i32) % s.len() as i32) as usize,
+                            &None => s.len() as usize,
+                        };
+                        let step = match opt_step {
+                            //Some(step) => step as usize,
+                            &None => 1 as usize,
+                            _ => unimplemented!(),
+                        };
+                        curr_frame.stack.push(NativeType::Str(s[start..stop].to_string()));
                     },
                     // TODO: implement other Slice possibilities
                     _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported (yet?)", tos1, tos)
