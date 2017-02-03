@@ -359,6 +359,9 @@ impl VirtualMachine {
                             (&NativeType::Int(ref v1i), &NativeType::Float(ref v2f)) => {
                                 curr_frame.stack.push(NativeType::Boolean(v2f == &(*v1i as f64)));
                             },
+                            (&NativeType::List(ref l1), &NativeType::List(ref l2)) => {
+                                curr_frame.stack.push(NativeType::Boolean(l2 == l1));
+                            },
                             _ => panic!("TypeError in COMPARE_OP: can't compare {:?} with {:?}", v1, v2)
                         };
                     }
@@ -548,7 +551,27 @@ impl VirtualMachine {
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
                 match (&tos1, &tos) {
-                    (&NativeType::List(ref l), &NativeType::Int(ref index)) => curr_frame.stack.push(l[*index as usize].clone()),
+                    (&NativeType::List(ref l), &NativeType::Int(ref index)) => {
+                        let pos_index = (index + l.len() as i32) % l.len() as i32;
+                        curr_frame.stack.push(l[pos_index as usize].clone())
+                    },
+                    (&NativeType::List(ref l), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
+                        let start = match opt_start {
+                            &Some(start) => ((start + l.len() as i32) % l.len() as i32) as usize,
+                            &None => 0,
+                        };
+                        let stop = match opt_stop {
+                            &Some(stop) => ((stop + l.len() as i32) % l.len() as i32) as usize,
+                            &None => l.len() as usize,
+                        };
+                        let step = match opt_step {
+                            //Some(step) => step as usize,
+                            &None => 1 as usize,
+                            _ => unimplemented!(),
+                        };
+                        // TODO: we could potentially avoid this copy and use slice
+                        curr_frame.stack.push(NativeType::List(l[start..stop].to_vec()));
+                    },
                     (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(t[*index as usize].clone()),
                     (&NativeType::Str(ref s), &NativeType::Int(ref index)) => {
                         let idx = (index + s.len() as i32) % s.len() as i32;
