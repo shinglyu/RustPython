@@ -31,7 +31,7 @@ pub enum NativeType{
     Function(Function),
     Slice(Option<i32>, Option<i32>, Option<i32>), // start, stop, step
     #[serde(skip_serializing, skip_deserializing)]
-    NativeFunction(fn(Vec<NativeType>) -> NativeType ),
+    NativeFunction(fn(Vec<Rc<NativeType>>) -> NativeType ),
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -572,15 +572,14 @@ impl VirtualMachine {
                 None
             },
 
-            /* 
             ("BINARY_SUBSCR", None) => {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
-                match (&tos1, &tos) {
+                match (tos1.deref(), tos.deref()) {
                     (&NativeType::List(ref l), &NativeType::Int(ref index)) => {
                         let pos_index = (index + l.len() as i32) % l.len() as i32;
-                        curr_frame.stack.push(l[pos_index as usize].clone())
+                        curr_frame.stack.push(Rc::new(l[pos_index as usize].clone()))
                     },
                     (&NativeType::List(ref l), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
@@ -597,12 +596,12 @@ impl VirtualMachine {
                             _ => unimplemented!(),
                         };
                         // TODO: we could potentially avoid this copy and use slice
-                        curr_frame.stack.push(NativeType::List(l[start..stop].to_vec()));
+                        curr_frame.stack.push(Rc::new(NativeType::List(l[start..stop].to_vec())));
                     },
-                    (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(t[*index as usize].clone()),
+                    (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(Rc::new(t[*index as usize].clone())),
                     (&NativeType::Str(ref s), &NativeType::Int(ref index)) => {
                         let idx = (index + s.len() as i32) % s.len() as i32;
-                        curr_frame.stack.push(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string()));
+                        curr_frame.stack.push(Rc::new(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string())));
                     },
                     (&NativeType::Str(ref s), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
@@ -618,7 +617,7 @@ impl VirtualMachine {
                             &None => 1 as usize,
                             _ => unimplemented!(),
                         };
-                        curr_frame.stack.push(NativeType::Str(s[start..stop].to_string()));
+                        curr_frame.stack.push(Rc::new(NativeType::Str(s[start..stop].to_string())));
                     },
                     // TODO: implement other Slice possibilities
                     _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported (yet?)", tos1, tos)
@@ -636,9 +635,9 @@ impl VirtualMachine {
             ("UNARY_NEGATIVE", None) => {
                 let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
-                match v {
-                    NativeType::Int(v1i) => {
-                        curr_frame.stack.push(NativeType::Int(-v1i));
+                match v.deref() {
+                    &NativeType::Int(v1i) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(-v1i)));
                     },
                     _ => panic!("TypeError in UINARY_NEGATIVE")
                 }
@@ -665,14 +664,14 @@ impl VirtualMachine {
                 // https://docs.python.org/3.4/library/dis.html#opcode-MAKE_FUNCTION
                 let curr_frame = self.curr_frame();
                 let qualified_name = curr_frame.stack.pop().unwrap();
-                let code_obj = match curr_frame.stack.pop().unwrap() {
-                    NativeType::Code(code) => code,
+                let code_obj = match curr_frame.stack.pop().unwrap().deref() {
+                    &NativeType::Code(ref code) => code.clone(),
                     _ => panic!("Second item on the stack should be a code object")
                 };
                 // pop argc arguments
                 // argument: name, args, globals
                 let func = Function::new(code_obj);
-                curr_frame.stack.push(NativeType::Function(func));
+                curr_frame.stack.push(Rc::new(NativeType::Function(func)));
                 None
             },
             ("CALL_FUNCTION", Some(argc)) => {
@@ -686,9 +685,9 @@ impl VirtualMachine {
                     for _ in 0..kw_count {
                         let native_val = curr_frame.stack.pop().unwrap();
                         let native_key = curr_frame.stack.pop().unwrap();
-                        if let (val, NativeType::Str(key)) = (native_val, native_key) {
+                        if let (ref val, &NativeType::Str(ref key)) = (native_val, native_key.deref()) {
 
-                            kw_args.insert(key, val);
+                            kw_args.insert(key.clone(), val.clone());
                         }
                         else {
                             panic!("Incorrect type found while building keyword argument list")
@@ -704,8 +703,8 @@ impl VirtualMachine {
                 };
 
                 let func = {
-                    match self.curr_frame().stack.pop().unwrap() {
-                        NativeType::Function(func) => {
+                    match self.curr_frame().stack.pop().unwrap().deref() {
+                        &NativeType::Function(ref func) => {
                             // pop argc arguments
                             // argument: name, args, globals
                             // build the callargs hashmap
@@ -716,29 +715,27 @@ impl VirtualMachine {
                             }
                             // merge callargs with kw_args
                             let return_value = {
-                                let frame = self.make_frame(func.code, callargs, Some(locals));
+                                let frame = self.make_frame(func.code.clone(), callargs, Some(locals));
                                 self.run_frame(frame)
                             };
-                            self.curr_frame().stack.push(return_value);
+                            self.curr_frame().stack.push(Rc::new(return_value));
                         },
-                        NativeType::NativeFunction(func) => {
+                        &NativeType::NativeFunction(func) => {
                             pos_args.reverse();
                             let return_value = func(pos_args);
-                            self.curr_frame().stack.push(return_value);
+                            self.curr_frame().stack.push(Rc::new(return_value));
                         },
                         _ => panic!("The item on the stack should be a code object")
                     }
                 };
                 None
             },
-            */
             ("RETURN_VALUE", None) => {
                 // Hmmm... what is this used?
                 // I believe we need to push this to the next frame
                 self.curr_frame().return_value = (*self.curr_frame().stack.pop().unwrap()).clone();
                 Some("return".to_string())
             },
-            /*
             ("SETUP_LOOP", Some(delta)) => {
                 let curr_frame = self.curr_frame();
                 let curr_offset = curr_frame.get_bytecode_offset().unwrap();
@@ -756,7 +753,6 @@ impl VirtualMachine {
                 // Skip
                 None
             },
-            */
             (name, _) => {
                 panic!("Unrecongnizable op code: {}", name);
             }
