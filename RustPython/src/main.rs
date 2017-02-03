@@ -458,6 +458,11 @@ impl VirtualMachine {
                     }
                     (NativeType::Str(str1), NativeType::Str(str2)) => {
                         curr_frame.stack.push(NativeType::Str(format!("{}{}", str2, str1)));
+                    }
+                    (NativeType::List(mut l1), NativeType::List(l2)) => {
+                        let mut new_l = l2.clone();
+                        new_l.append(&mut l1);
+                        curr_frame.stack.push(NativeType::List(new_l));
 
                     }
                     _ => panic!("TypeError in BINARY_ADD")
