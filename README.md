@@ -6,9 +6,7 @@ A Python interpreter written in Rust
 # Installation
 
 ```
-virtualenv venv --python=python3
-source venv/bin/activate
-pip install bytecode
+bash init_env.sh
 ```
 
 # Run
