@@ -576,6 +576,7 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
+                debug!("tos: {:?}, tos1: {:?}", tos, tos1);
                 match (tos1.deref(), tos.deref()) {
                     (&NativeType::List(ref l), &NativeType::Int(ref index)) => {
                         let pos_index = (index + l.len() as i32) % l.len() as i32;
@@ -605,11 +606,16 @@ impl VirtualMachine {
                     },
                     (&NativeType::Str(ref s), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
+                            &Some(start) if start > s.len()  as i32 => s.len(),
+                            &Some(start) if start <= s.len() as i32 => ((start + s.len() as i32) % s.len() as i32) as usize,
+                            &Some(_) => panic!("Bad start index for string slicing"),
                             &Some(start) => ((start + s.len() as i32) % s.len() as i32) as usize,
                             &None => 0,
                         };
                         let stop = match opt_stop {
-                            &Some(stop) => ((stop + s.len() as i32) % s.len() as i32) as usize,
+                            &Some(stop) if stop > s.len() as i32 => s.len(),
+                            &Some(stop) if stop <= s.len() as i32 => ((stop + s.len() as i32) % s.len() as i32) as usize, // Do we need this modding?
+                            &Some(_) => panic!("Bad stop index for string slicing"),
                             &None => s.len() as usize,
                         };
                         let step = match opt_step {
