@@ -442,22 +442,26 @@ impl VirtualMachine {
                 None
             },
             
-            /*
             ("STORE_SUBSCR", None) => {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
                 let tos2 = curr_frame.stack.pop().unwrap();
                 match (tos1.deref(), tos.deref()) {
-                    (&NativeType::List(refl), &NativeType::Int(index)) => {
-                        l[index as usize] = (*tos2).clone();
+                    /* TODO: support list assignment
+                    (&NativeType::List(mut refl), &NativeType::Int(index)) => {
+                        refl[index as usize] = (*tos2).clone();
+                    },
+                    */
+                    (&NativeType::Str(_), &NativeType::Int(_)) => {
+                        // TODO: raise TypeError: 'str' object does not support item assignment
+                        panic!("TypeError: 'str' object does not support item assignment")
                     },
                     _ => panic!("TypeError in STORE_SUBSCR")
                 }
                 curr_frame.stack.push(tos1);
                 None
             },
-            */
 
             ("BINARY_ADD", None) => {
                 let curr_frame = self.curr_frame();
