@@ -13,8 +13,8 @@ bash init_env.sh
 
 ```
 ./test.sh <path/to/file.py> # compile and run
-./test.sh --bytecode <path/to/file.py> # print the bytecode
-./test.sh --dis <path/to/file.py> # Run python -m dis
+./test.sh <path/to/file.py> --bytecode # print the bytecode in JSON
+./test.sh <path/to/file.py> --dis # Run python -m dis
 ```
 
 ## Manual
@@ -30,8 +30,10 @@ cargo run ../test.bytecode
 # Testing & debugging
 
 ```
-./test_all.sh
+./test_all.sh # Run all tests under tests/
 ```
+
+* If a test is expected to fail or raise exception, add `xfail_*` prefix to the filename.
 
 ## Logging
 
@@ -55,8 +57,8 @@ RUST_LOG=debug ./tests_all.sh
 * Runs the [pybenchmark](https://pybenchmarks.org/) benchmark test
 * Run famous/popular python modules (which?)
 
-* Compatible with CPython 2.7
+* Compatible with CPython 3.6
 
 # Rust version
-rustc 1.16.0-nightly (bf6d7b665 2017-01-15)
+rustc 1.20.0-nightly
 
