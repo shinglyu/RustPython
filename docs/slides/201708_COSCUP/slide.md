@@ -1,7 +1,6 @@
 class: center, middle
 ##Python Interpreter in Rust
-###Introduction
-#### 2017/3/28
+#### 2017/8/6, COSCUP
 #### Shing Lyu
 
 
@@ -10,10 +9,18 @@ top, middle, bottom
 left, center, right
 
 ---
+### About Me
+* 呂行 Shing Lyu
+* Mozilla engineer
+* Servo team
+# TODO: Servo logo
+---
 ### Python's architecture
 * Interpreted
 * Garbage Collected
 * Compiler => bytecode => VM
+
+# TODO: Python Logo
 
 ---
 background-image: url('pic/ice-cream.jpg')
@@ -32,34 +39,49 @@ class: bleed
   * Jsapy (JS)
   * Brython (Python in browser)
 
+# TODO: Python logos
+
+---
+class: center, middle
+
+# Why & How?
 ---
 ### Why rewriting Python in Rust?
-* Memory safety
-
-* Learn about Python internal
-* Learn real world Rust
+* Memory safety (?)
+* Learn about Python's internal
+* Learn to write Rust from scratch
+* FUN!
 
 ---
 ### Implementation strategy
+* Mostly follow CPython 3.6
 * Focus on the VM first, then the compiler
-  * Reuse the Python built-in compiler to generate bytecode
+  * Use the Python built-in compiler to generate bytecode
+* Focus on learning rather than usability
+
+---
+### Milestones
 * Basic arithmetics
+* Variables
 * Control flows (require JUMP)
 * Function call (require call stack)
 * Built-in functions (require native code)
+* Run Python tutorial example code <= We're here
+* Exceptions
+* GC
 * Run popular libraries
 
 
 ---
-### References
-* [`dis` documentation](https://docs.python.org/3.4/library/dis.html)
-* [byterun](http://www.aosabook.org/en/500L/a-python-interpreter-written-in-python.html)
-* [byterun (GitHub)](https://github.com/nedbat/byterun/)
-* [cpython source code](https://github.com/python/cpython)
+class: center, middle
+# Python Internals
 
 ---
 ### How Python VM works
 * Stack machine
+  * Call stack and frames
+  * Has a NAMES list and CONSTS list
+  * Has a STACK as workspace
 * Accepts Python bytecode
 * `python -m dis source.py`
 
@@ -72,11 +94,7 @@ class: bleed
 print(1+1)
 ```
 
-We run `python3 -m dis source.py`
-
----
-
-### The bytecode
+Running `python3 -m dis source.py` gives us
 
 ```
   1    0 LOAD_NAME           0 (print)
@@ -116,9 +134,9 @@ We run `python3 -m dis source.py`
 ---
 
 ### CALL_FUNCTION 1
-1. argument = stack.pop() (argument == 2)
-2. function = stack.top() (function == print)
-3. call print(2)
+1. `argument = stack.pop()` (argument == 2)
+2. `function = stack.top()` (function == print)
+3. call `print(2)`
 
 * NAMES = ["print"]
 * CONSTS = [None, 2]
@@ -160,18 +178,23 @@ We run `python3 -m dis source.py`
 
 ---
 
+class: center, middle
 # Technical Detail
 
 ---
 
 ### Bytecode format
-* `dis` output are for human
+* `dis` output format is for human reader
 * Implementing a `dis` format parser is a waste of time
-* Emit JSON bytecode using [bytecode](https://pypi.python.org/pypi/bytecode/0.5)
+* Emit JSON bytecode using the [bytecode](https://pypi.python.org/pypi/bytecode/0.5) module
 
 ```
-code = compile(f,...)  # Python built-in
-bytecode.Bytecode().from_code(code).to_concrete_bytecode()  # Contains information we need
+
+code = compile(f,...)  # Python built-in, return a Code object
+
+bytecode.Bytecode()
+   .from_code(code)
+   .to_concrete_bytecode()
 ```
 
 ---
@@ -179,30 +202,25 @@ bytecode.Bytecode().from_code(code).to_concrete_bytecode()  # Contains informati
 ### Types
 * Everything is a `PyObject` in CPython
 * We'll need that class hierarchy eventually
-* Use a Rusts `enum` for now
+* Use a Rust `enum` for now
+
 ```
 pub enum NativeType{
     NoneType,
     Boolean(bool),
     Int(i32),
-    Float(f64),
     Str(String),
-    Unicode(String),
-    List(Vec<NativeType>),
     Tuple(Vec<NativeType>),
-    Iter(Vec<NativeType>), // TODO: use Iterator instead
-    Code(PyCodeObject),
-    Function(Function),
-    Slice(Option<i32>, Option<i32>, Option<i32>), // start, stop, step
-    #[serde(skip_serializing, skip_deserializing)]
-    NativeFunction(fn(Vec<NativeType>) -> NativeType ),
+    ...
 }
 ```
 
 ---
 
 ### Testing
-* Need `assert` => Use `panic!()`
+* `assert` is essential to for unittests
+* `assert` rasis `AssertionError`
+* Use `panic!()` before we implements exception
 
 ```
 assert 1 == 1
@@ -218,19 +236,43 @@ assert 1 == 1
              21 RETURN_VALUE
 ```
 
-
 ---
-# Not Covered
-* Structural types
-* Function call
-* Builtin functions
+### Native Function
+
+* e.g. `print()`
+
+```
+pub enum NativeType {
+    NativeFunction(fn(Vec<NativeType>) -> NativeType),
+    ...
+}
+
+match stack.pop() {
+    NativeFunction(func) => return_val = func(),
+    _ => ...
+}
+
+```
 
 ---
 
 ### Next step
+* Exceptions
 * Make it run a small but popular tool/library
 * Implement the parser
 * Figure out garbage collection
 * Performance benchmarking
 
+---
+class: middle, center
+
+# Thank you
+
+---
+
+### References
+* [`dis` documentation](https://docs.python.org/3.4/library/dis.html)
+* [byterun](http://www.aosabook.org/en/500L/a-python-interpreter-written-in-python.html)
+* [byterun (GitHub)](https://github.com/nedbat/byterun/)
+* [cpython source code](https://github.com/python/cpython)
 
