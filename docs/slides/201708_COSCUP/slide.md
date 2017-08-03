@@ -13,18 +13,19 @@ left, center, right
 * 呂行 Shing Lyu
 * Mozilla engineer
 * Servo team
-# TODO: Servo logo
+
+![rust_and_servo](pic/rust-servo.png)
 ---
 ### Python's architecture
 * Interpreted
 * Garbage Collected
 * Compiler => bytecode => VM
 
-# TODO: Python Logo
+![python](pic/python-logo.png)
 
 ---
 background-image: url('pic/ice-cream.jpg')
-class: bleed
+class: center, middle, bleed, text-bg
 # Flavors
 
 
@@ -38,8 +39,6 @@ class: bleed
   * Byterun
   * Jsapy (JS)
   * Brython (Python in browser)
-
-# TODO: Python logos
 
 ---
 class: center, middle
@@ -73,7 +72,8 @@ class: center, middle
 
 
 ---
-class: center, middle
+class: center, middle, bleed, text-bg
+background-image: url('pic/car_cutaway.jpg')
 # Python Internals
 
 ---
@@ -178,7 +178,8 @@ Running `python3 -m dis source.py` gives us
 
 ---
 
-class: center, middle
+class: center, middle, bleed, text-bg
+background-image: url('pic/electronic_parts.jpg')
 # Technical Detail
 
 ---
@@ -196,7 +197,7 @@ bytecode.Bytecode()
    .from_code(code)
    .to_concrete_bytecode()
 ```
-
+* Load into Rust using `serde_json`
 ---
 
 ### Types
@@ -219,8 +220,8 @@ pub enum NativeType{
 
 ### Testing
 * `assert` is essential to for unittests
-* `assert` rasis `AssertionError`
-* Use `panic!()` before we implements exception
+* `assert` raises `AssertionError`
+* Use `panic!()` before we implement exception
 
 ```
 assert 1 == 1
@@ -256,12 +257,19 @@ match stack.pop() {
 
 ---
 
-### Next step
+### Next steps
 * Exceptions
 * Make it run a small but popular tool/library
 * Implement the parser
 * Figure out garbage collection
 * Performance benchmarking
+
+---
+### Contribute
+
+## https://github.com/shinglyu/RustPython
+
+![qr_code](pic/repo_QR.png)
 
 ---
 class: middle, center
