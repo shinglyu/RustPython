@@ -11,6 +11,8 @@ use std::collections::HashMap;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
+use std::rc::Rc;
+use std::ops::Deref;
 
 mod builtins;
 
@@ -29,7 +31,7 @@ pub enum NativeType{
     Function(Function),
     Slice(Option<i32>, Option<i32>, Option<i32>), // start, stop, step
     #[serde(skip_serializing, skip_deserializing)]
-    NativeFunction(fn(Vec<NativeType>) -> NativeType ),
+    NativeFunction(fn(Vec<Rc<NativeType>>) -> NativeType ),
 }
 
 const CMP_OP: &'static [&'static str] = &[">",
@@ -57,10 +59,10 @@ struct Frame {
     // TODO: We are using Option<i32> in stack for handline None return value
     code: PyCodeObject,
     // We need 1 stack per frame
-    stack: Vec<NativeType>,   // The main data frame of the stack machine
+    stack: Vec<Rc<NativeType>>,   // The main data frame of the stack machine
     blocks: Vec<Block>,  // Block frames, for controling loops and exceptions
-    globals: HashMap<String, NativeType>, // Variables
-    locals: HashMap<String, NativeType>, // Variables
+    globals: HashMap<String, Rc<NativeType>>, // Variables
+    locals: HashMap<String, Rc<NativeType>>, // Variables
     labels: HashMap<usize, usize>, // Maps label id to line number, just for speedup
     lasti: usize, // index of last instruction ran
     return_value: NativeType,
@@ -133,7 +135,7 @@ impl VirtualMachine {
 
     // Can we get rid of the code paramter?
 
-    fn make_frame(&self, code: PyCodeObject, callargs: HashMap<String, NativeType>, globals: Option<HashMap<String, NativeType>>) -> Frame {
+    fn make_frame(&self, code: PyCodeObject, callargs: HashMap<String, Rc<NativeType>>, globals: Option<HashMap<String, Rc<NativeType>>>) -> Frame {
         //populate the globals and locals
         let mut labels = HashMap::new();
         let mut curr_offset = 0;
@@ -150,8 +152,8 @@ impl VirtualMachine {
         locals.extend(callargs);
 
         //TODO: move this into the __builtin__ module when we have a module type
-        locals.insert("print".to_string(), NativeType::NativeFunction(builtins::print));
-        locals.insert("len".to_string(), NativeType::NativeFunction(builtins::len));
+        locals.insert("print".to_string(), Rc::new(NativeType::NativeFunction(builtins::print)));
+        locals.insert("len".to_string(), Rc::new(NativeType::NativeFunction(builtins::len)));
         Frame {
             code: code,
             stack: vec![],
@@ -210,18 +212,18 @@ impl VirtualMachine {
             debug!("env  :{:?}", self.curr_frame().locals);
             debug!("Executing op code: {:?}", op_code);
         }
-        match (op_code.1.as_ref(), op_code.2){
+        match (op_code.1.as_ref(), op_code.2) {
             ("LOAD_CONST", Some(consti)) => {
                 // println!("Loading const at index: {}", consti);
                 let curr_frame = self.curr_frame();
-                curr_frame.stack.push(curr_frame.code.co_consts[consti].clone());
+                curr_frame.stack.push(Rc::new(curr_frame.code.co_consts[consti].clone()));
                 None
             },
 
             // TODO: universal stack element type
             ("LOAD_CONST", None) => {
                 // println!("Loading const at index: {}", consti);
-                self.curr_frame().stack.push(NativeType::NoneType);
+                self.curr_frame().stack.push(Rc::new(NativeType::NoneType));
                 None
             },
             ("POP_TOP", None) => {
@@ -238,7 +240,7 @@ impl VirtualMachine {
             ("STORE_NAME", Some(namei)) => {
                 // println!("Loading const at index: {}", consti);
                 let curr_frame = self.curr_frame();
-                curr_frame.locals.insert(curr_frame.code.co_names[namei].clone(), curr_frame.stack.pop().unwrap());
+                curr_frame.locals.insert(curr_frame.code.co_names[namei].clone(), curr_frame.stack.pop().unwrap().clone());
                 None
             },
             ("LOAD_NAME", Some(namei)) => {
@@ -266,10 +268,10 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let mut vec = vec!();
                 for _ in 0..count {
-                    vec.push(curr_frame.stack.pop().unwrap());
+                    vec.push((*curr_frame.stack.pop().unwrap()).clone());
                 }
                 vec.reverse();
-                curr_frame.stack.push(NativeType::List(vec));
+                curr_frame.stack.push(Rc::new(NativeType::List(vec)));
                 None
             },
 
@@ -281,7 +283,7 @@ impl VirtualMachine {
                     vec.push(curr_frame.stack.pop().unwrap());
                 }
                 vec.reverse();
-                let mut out:Vec<Option<i32>> = vec.into_iter().map(|x| match x {
+                let mut out:Vec<Option<i32>> = vec.into_iter().map(|x| match *x {
                     NativeType::Int(n) => Some(n),
                     NativeType::NoneType => None,
                     _ => panic!("Expect Int or None as BUILD_SLICE arguments, got {:?}", x),
@@ -293,19 +295,20 @@ impl VirtualMachine {
                 assert!(out.len() == 3);
                 // TODO: assert the stop start and step are NativeType::Int
                 // See https://users.rust-lang.org/t/how-do-you-assert-enums/1187/8
-                curr_frame.stack.push(NativeType::Slice(out[0], out[1], out[2]));
+                curr_frame.stack.push(Rc::new(NativeType::Slice(out[0], out[1], out[2])));
                 None
             },
 
             ("GET_ITER", None) => {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
-                let iter = match tos {
+                let iter = match *tos {
+                    //TODO: is this clone right?
                     // Return a Iterator instead              vvv
-                    NativeType::List(vec) => NativeType::Iter(vec),
+                    NativeType::List(ref vec) => NativeType::Iter(vec.clone()),
                     _ => panic!("TypeError: object is not iterable")
                 };
-                curr_frame.stack.push(iter);
+                curr_frame.stack.push(Rc::new(iter));
                 None
             },
 
@@ -313,8 +316,8 @@ impl VirtualMachine {
                 // This function should be rewrote to use Rust native iterator
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
-                let result = match tos {
-                    NativeType::Iter(v) =>  {
+                let result = match *tos {
+                    NativeType::Iter(ref v) =>  {
                         if v.len() > 0 {
                             Some(v.clone()) // Unnessary clone here
                         }
@@ -327,8 +330,8 @@ impl VirtualMachine {
                 if let Some(vec) = result {
                     let (first, rest) = vec.split_first().unwrap();
                     // Unnessary clone here
-                    curr_frame.stack.push(NativeType::Iter(rest.to_vec()));
-                    curr_frame.stack.push(first.clone());
+                    curr_frame.stack.push(Rc::new(NativeType::Iter(rest.to_vec())));
+                    curr_frame.stack.push(Rc::new(first.clone()));
                 }
                 else {
                     // Iterator was already poped in the first line of this function
@@ -346,32 +349,32 @@ impl VirtualMachine {
                 match CMP_OP[cmp_op_i] {
                     // To avoid branch explotion, use an array of callables instead
                     "==" => {
-                        match (&v1, &v2) {
+                        match (v1.deref(), v2.deref()) {
                             (&NativeType::Int(ref v1i), &NativeType::Int(ref v2i)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2i == v1i));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2i == v1i)));
                             },
                             (&NativeType::Float(ref v1f), &NativeType::Float(ref v2f)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2f == v1f));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2f == v1f)));
                             },
                             (&NativeType::Str(ref v1s), &NativeType::Str(ref v2s)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2s == v1s));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2s == v1s)));
                             },
                             (&NativeType::Int(ref v1i), &NativeType::Float(ref v2f)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2f == &(*v1i as f64)));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2f == &(*v1i as f64))));
                             },
                             (&NativeType::List(ref l1), &NativeType::List(ref l2)) => {
-                                curr_frame.stack.push(NativeType::Boolean(l2 == l1));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(l2 == l1)));
                             },
                             _ => panic!("TypeError in COMPARE_OP: can't compare {:?} with {:?}", v1, v2)
                         };
                     }
                     ">" => {
-                        match (&v1, &v2) {
+                        match (v1.deref(), v2.deref()) {
                             (&NativeType::Int(ref v1i), &NativeType::Int(ref v2i)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2i < v1i));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2i < v1i)));
                             },
                             (&NativeType::Float(ref v1f), &NativeType::Float(ref v2f)) => {
-                                curr_frame.stack.push(NativeType::Boolean(v2f < v1f));
+                                curr_frame.stack.push(Rc::new(NativeType::Boolean(v2f < v1f)));
                             },
                             _ => panic!("TypeError in COMPARE_OP")
                         };
@@ -385,7 +388,7 @@ impl VirtualMachine {
             ("POP_JUMP_IF_TRUE", Some(ref target)) => {
                 let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
-                if v == NativeType::Boolean(true) {
+                if *v == NativeType::Boolean(true) {
                     curr_frame.lasti = curr_frame.labels.get(target).unwrap().clone();
                 }
                 None
@@ -394,7 +397,7 @@ impl VirtualMachine {
             ("POP_JUMP_IF_FALSE", Some(ref target)) => {
                 let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
-                if v == NativeType::Boolean(false) {
+                if *v == NativeType::Boolean(false) {
                     curr_frame.lasti = curr_frame.labels.get(target).unwrap().clone();
                 }
                 None
@@ -430,12 +433,33 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
-                match (tos, tos1) {
-                    (NativeType::Int(tosi), NativeType::Int(tos1i)) => {
-                        curr_frame.stack.push(NativeType::Int(tos1i + tosi));
+                match (tos.deref(), tos1.deref()) {
+                    (&NativeType::Int(ref tosi), &NativeType::Int(ref tos1i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(tos1i + tosi)));
                     },
                     _ => panic!("TypeError in BINARY_ADD")
                 }
+                None
+            },
+            
+            ("STORE_SUBSCR", None) => {
+                let curr_frame = self.curr_frame();
+                let tos = curr_frame.stack.pop().unwrap();
+                let tos1 = curr_frame.stack.pop().unwrap();
+                let tos2 = curr_frame.stack.pop().unwrap();
+                match (tos1.deref(), tos.deref()) {
+                    /* TODO: support list assignment
+                    (&NativeType::List(mut refl), &NativeType::Int(index)) => {
+                        refl[index as usize] = (*tos2).clone();
+                    },
+                    */
+                    (&NativeType::Str(_), &NativeType::Int(_)) => {
+                        // TODO: raise TypeError: 'str' object does not support item assignment
+                        panic!("TypeError: 'str' object does not support item assignment")
+                    },
+                    _ => panic!("TypeError in STORE_SUBSCR")
+                }
+                curr_frame.stack.push(tos1);
                 None
             },
 
@@ -443,26 +467,27 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i + v1i));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(ref v1i), &NativeType::Int(ref v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i + v1i)));
                     }
-                    (NativeType::Float(v1f), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Float(v2i as f64 + v1f));
+                    (&NativeType::Float(ref v1f), &NativeType::Int(ref v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float(*v2i as f64 + v1f)));
                     } 
-                    (NativeType::Int(v1i), NativeType::Float(v2f)) => {
-                        curr_frame.stack.push(NativeType::Float(v2f + v1i as f64));
+                    (&NativeType::Int(ref v1i), &NativeType::Float(ref v2f)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float(v2f + *v1i as f64)));
                     }
-                    (NativeType::Float(v1f), NativeType::Float(v2f)) => {
-                        curr_frame.stack.push(NativeType::Float(v2f + v1f));
+                    (&NativeType::Float(ref v1f), &NativeType::Float(ref v2f)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float(v2f + v1f)));
                     }
-                    (NativeType::Str(str1), NativeType::Str(str2)) => {
-                        curr_frame.stack.push(NativeType::Str(format!("{}{}", str2, str1)));
+                    (&NativeType::Str(ref str1), &NativeType::Str(ref str2)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Str(format!("{}{}", str2, str1))));
                     }
-                    (NativeType::List(mut l1), NativeType::List(l2)) => {
+                    (&NativeType::List(ref l1), &NativeType::List(ref l2)) => {
                         let mut new_l = l2.clone();
-                        new_l.append(&mut l1);
-                        curr_frame.stack.push(NativeType::List(new_l));
+                        // TODO: remove unnessary copy
+                        new_l.append(&mut l1.clone());
+                        curr_frame.stack.push(Rc::new(NativeType::List(new_l)));
 
                     }
                     _ => panic!("TypeError in BINARY_ADD")
@@ -473,18 +498,18 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i.pow(v1i as u32)));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(v1i), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i.pow(v1i as u32))));
                     }
-                    (NativeType::Float(v1f), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Float((v2i as f64).powf(v1f)));
+                    (&NativeType::Float(v1f), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float((v2i as f64).powf(v1f))));
                     } 
-                    (NativeType::Int(v1i), NativeType::Float(v2f)) => {
-                        curr_frame.stack.push(NativeType::Float(v2f.powi(v1i)));
+                    (&NativeType::Int(v1i), &NativeType::Float(v2f)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float(v2f.powi(v1i))));
                     }
-                    (NativeType::Float(v1f), NativeType::Float(v2f)) => {
-                        curr_frame.stack.push(NativeType::Float(v2f.powf(v1f)));
+                    (&NativeType::Float(v1f), &NativeType::Float(v2f)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Float(v2f.powf(v1f))));
                     }
                     _ => panic!("TypeError in BINARY_POWER")
                 }
@@ -494,9 +519,9 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i * v1i));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(v1i), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i * v1i)));
                     },
                     /*
                     (NativeType::Float(v1f), NativeType::Int(v2i)) => {
@@ -518,9 +543,9 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i / v1i));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(v1i), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i / v1i)));
                     },
                     _ => panic!("TypeError in BINARY_DIVIDE")
                 }
@@ -530,9 +555,9 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i % v1i));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(v1i), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i % v1i)));
                     },
                     _ => panic!("TypeError in BINARY_MODULO")
                 }
@@ -542,9 +567,9 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let v1 = curr_frame.stack.pop().unwrap();
                 let v2 = curr_frame.stack.pop().unwrap();
-                match (v1, v2) {
-                    (NativeType::Int(v1i), NativeType::Int(v2i)) => {
-                        curr_frame.stack.push(NativeType::Int(v2i - v1i));
+                match (v1.deref(), v2.deref()) {
+                    (&NativeType::Int(v1i), &NativeType::Int(v2i)) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(v2i - v1i)));
                     },
                     _ => panic!("TypeError in BINARY_SUBSTRACT")
                 }
@@ -555,10 +580,11 @@ impl VirtualMachine {
                 let curr_frame = self.curr_frame();
                 let tos = curr_frame.stack.pop().unwrap();
                 let tos1 = curr_frame.stack.pop().unwrap();
-                match (&tos1, &tos) {
+                debug!("tos: {:?}, tos1: {:?}", tos, tos1);
+                match (tos1.deref(), tos.deref()) {
                     (&NativeType::List(ref l), &NativeType::Int(ref index)) => {
                         let pos_index = (index + l.len() as i32) % l.len() as i32;
-                        curr_frame.stack.push(l[pos_index as usize].clone())
+                        curr_frame.stack.push(Rc::new(l[pos_index as usize].clone()))
                     },
                     (&NativeType::List(ref l), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
@@ -575,20 +601,25 @@ impl VirtualMachine {
                             _ => unimplemented!(),
                         };
                         // TODO: we could potentially avoid this copy and use slice
-                        curr_frame.stack.push(NativeType::List(l[start..stop].to_vec()));
+                        curr_frame.stack.push(Rc::new(NativeType::List(l[start..stop].to_vec())));
                     },
-                    (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(t[*index as usize].clone()),
+                    (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(Rc::new(t[*index as usize].clone())),
                     (&NativeType::Str(ref s), &NativeType::Int(ref index)) => {
                         let idx = (index + s.len() as i32) % s.len() as i32;
-                        curr_frame.stack.push(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string()));
+                        curr_frame.stack.push(Rc::new(NativeType::Str(s.chars().nth(idx as usize).unwrap().to_string())));
                     },
                     (&NativeType::Str(ref s), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
+                            &Some(start) if start > s.len()  as i32 => s.len(),
+                            &Some(start) if start <= s.len() as i32 => ((start + s.len() as i32) % s.len() as i32) as usize,
+                            &Some(_) => panic!("Bad start index for string slicing"),
                             &Some(start) => ((start + s.len() as i32) % s.len() as i32) as usize,
                             &None => 0,
                         };
                         let stop = match opt_stop {
-                            &Some(stop) => ((stop + s.len() as i32) % s.len() as i32) as usize,
+                            &Some(stop) if stop > s.len() as i32 => s.len(),
+                            &Some(stop) if stop <= s.len() as i32 => ((stop + s.len() as i32) % s.len() as i32) as usize, // Do we need this modding?
+                            &Some(_) => panic!("Bad stop index for string slicing"),
                             &None => s.len() as usize,
                         };
                         let step = match opt_step {
@@ -596,7 +627,7 @@ impl VirtualMachine {
                             &None => 1 as usize,
                             _ => unimplemented!(),
                         };
-                        curr_frame.stack.push(NativeType::Str(s[start..stop].to_string()));
+                        curr_frame.stack.push(Rc::new(NativeType::Str(s[start..stop].to_string())));
                     },
                     // TODO: implement other Slice possibilities
                     _ => panic!("TypeError: indexing type {:?} with index {:?} is not supported (yet?)", tos1, tos)
@@ -614,9 +645,9 @@ impl VirtualMachine {
             ("UNARY_NEGATIVE", None) => {
                 let curr_frame = self.curr_frame();
                 let v = curr_frame.stack.pop().unwrap();
-                match v {
-                    NativeType::Int(v1i) => {
-                        curr_frame.stack.push(NativeType::Int(-v1i));
+                match v.deref() {
+                    &NativeType::Int(v1i) => {
+                        curr_frame.stack.push(Rc::new(NativeType::Int(-v1i)));
                     },
                     _ => panic!("TypeError in UINARY_NEGATIVE")
                 }
@@ -643,14 +674,14 @@ impl VirtualMachine {
                 // https://docs.python.org/3.4/library/dis.html#opcode-MAKE_FUNCTION
                 let curr_frame = self.curr_frame();
                 let qualified_name = curr_frame.stack.pop().unwrap();
-                let code_obj = match curr_frame.stack.pop().unwrap() {
-                    NativeType::Code(code) => code,
+                let code_obj = match curr_frame.stack.pop().unwrap().deref() {
+                    &NativeType::Code(ref code) => code.clone(),
                     _ => panic!("Second item on the stack should be a code object")
                 };
                 // pop argc arguments
                 // argument: name, args, globals
                 let func = Function::new(code_obj);
-                curr_frame.stack.push(NativeType::Function(func));
+                curr_frame.stack.push(Rc::new(NativeType::Function(func)));
                 None
             },
             ("CALL_FUNCTION", Some(argc)) => {
@@ -664,9 +695,9 @@ impl VirtualMachine {
                     for _ in 0..kw_count {
                         let native_val = curr_frame.stack.pop().unwrap();
                         let native_key = curr_frame.stack.pop().unwrap();
-                        if let (val, NativeType::Str(key)) = (native_val, native_key) {
+                        if let (ref val, &NativeType::Str(ref key)) = (native_val, native_key.deref()) {
 
-                            kw_args.insert(key, val);
+                            kw_args.insert(key.clone(), val.clone());
                         }
                         else {
                             panic!("Incorrect type found while building keyword argument list")
@@ -682,8 +713,8 @@ impl VirtualMachine {
                 };
 
                 let func = {
-                    match self.curr_frame().stack.pop().unwrap() {
-                        NativeType::Function(func) => {
+                    match self.curr_frame().stack.pop().unwrap().deref() {
+                        &NativeType::Function(ref func) => {
                             // pop argc arguments
                             // argument: name, args, globals
                             // build the callargs hashmap
@@ -694,15 +725,15 @@ impl VirtualMachine {
                             }
                             // merge callargs with kw_args
                             let return_value = {
-                                let frame = self.make_frame(func.code, callargs, Some(locals));
+                                let frame = self.make_frame(func.code.clone(), callargs, Some(locals));
                                 self.run_frame(frame)
                             };
-                            self.curr_frame().stack.push(return_value);
+                            self.curr_frame().stack.push(Rc::new(return_value));
                         },
-                        NativeType::NativeFunction(func) => {
+                        &NativeType::NativeFunction(func) => {
                             pos_args.reverse();
                             let return_value = func(pos_args);
-                            self.curr_frame().stack.push(return_value);
+                            self.curr_frame().stack.push(Rc::new(return_value));
                         },
                         _ => panic!("The item on the stack should be a code object")
                     }
@@ -712,7 +743,7 @@ impl VirtualMachine {
             ("RETURN_VALUE", None) => {
                 // Hmmm... what is this used?
                 // I believe we need to push this to the next frame
-                self.curr_frame().return_value = self.curr_frame().stack.pop().unwrap();
+                self.curr_frame().return_value = (*self.curr_frame().stack.pop().unwrap()).clone();
                 Some("return".to_string())
             },
             ("SETUP_LOOP", Some(delta)) => {
@@ -735,9 +766,8 @@ impl VirtualMachine {
             (name, _) => {
                 panic!("Unrecongnizable op code: {}", name);
             }
-        }
-
-    }
+        } // end match
+    } // end dispatch function
 }
 
 #[derive(PartialEq, Debug, Clone, Serialize, Deserialize)]

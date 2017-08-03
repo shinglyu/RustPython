@@ -1,21 +1,23 @@
 use NativeType;
+use std::rc::Rc;
+use std::ops::Deref;
 
-pub fn print(args: Vec<NativeType>) -> NativeType {
+pub fn print(args: Vec<Rc<NativeType>>) -> NativeType {
     for elem in args {
         // TODO: figure out how python's print vectors
-        match elem {
-            NativeType::NoneType => println!("None"),
-            NativeType::Boolean(b)=> {
-                if b {
+        match elem.deref() {
+            &NativeType::NoneType => println!("None"),
+            &NativeType::Boolean(ref b)=> {
+                if *b {
                     println!("True");
                 } else {
                     println!("False");
                 }
             },
-            NativeType::Int(x)  => println!("{}", x),
-            NativeType::Float(x)  => println!("{}", x),
-            NativeType::Str(x)  => println!("{}", x),
-            NativeType::Unicode(x)  => println!("{}", x),
+            &NativeType::Int(ref x)  => println!("{}", x),
+            &NativeType::Float(ref x)  => println!("{}", x),
+            &NativeType::Str(ref x)  => println!("{}", x),
+            &NativeType::Unicode(ref x)  => println!("{}", x),
             _ => panic!("Print for {:?} not implemented yet", elem),
             /*
             List(Vec<NativeType>),
@@ -31,11 +33,11 @@ pub fn print(args: Vec<NativeType>) -> NativeType {
     NativeType::NoneType
 }
 
-pub fn len(args: Vec<NativeType>) -> NativeType {
+pub fn len(args: Vec<Rc<NativeType>>) -> NativeType {
     if args.len() != 1 {
         panic!("len(s) expects exactly one parameter");
     }
-    let len = match &args[0] {
+    let len = match args[0].deref() {
         &NativeType::List(ref l) => l.len(),
         &NativeType::Tuple(ref t) => t.len(),
         &NativeType::Str(ref s) => s.len(),

@@ -19,7 +19,7 @@ do
   FILENAME="$(basename ${TESTCASE})"
   xfail=false
   if [ "${FILENAME:0:6}" = "xfail_" ]; then
-    echo "Expected FAILLLLLl"
+    echo "Expected FAIL"
     xfail=true
   fi
 
