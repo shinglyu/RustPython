@@ -160,7 +160,7 @@ Running `python3 -m dis source.py` gives us
 ```
 
 ---
-### LOAD_CONST 1
+### LOAD_CONST None
 * NAMES = ["print"]
 * CONSTS = [None, 2]
 * STACK:
