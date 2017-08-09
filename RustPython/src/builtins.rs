@@ -38,7 +38,7 @@ pub fn len(args: Vec<Rc<NativeType>>) -> NativeType {
         panic!("len(s) expects exactly one parameter");
     }
     let len = match args[0].deref() {
-        &NativeType::List(ref l) => l.len(),
+        &NativeType::List(ref l) => l.borrow().len(),
         &NativeType::Tuple(ref t) => t.len(),
         &NativeType::Str(ref s) => s.len(),
         _ => panic!("TypeError: object of this type has no len()")

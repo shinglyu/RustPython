@@ -8,6 +8,7 @@ extern crate serde_json;
 
 //extern crate eval; use eval::eval::*;
 use std::collections::HashMap;
+use std::cell::RefCell;
 use std::env;
 use std::fs::File;
 use std::io::prelude::*;
@@ -24,7 +25,8 @@ pub enum NativeType{
     Float(f64),
     Str(String),
     Unicode(String),
-    List(Vec<NativeType>),
+    #[serde(skip_serializing, skip_deserializing)]
+    List(RefCell<Vec<NativeType>>),
     Tuple(Vec<NativeType>),
     Iter(Vec<NativeType>), // TODO: use Iterator instead
     Code(PyCodeObject),
@@ -271,7 +273,7 @@ impl VirtualMachine {
                     vec.push((*curr_frame.stack.pop().unwrap()).clone());
                 }
                 vec.reverse();
-                curr_frame.stack.push(Rc::new(NativeType::List(vec)));
+                curr_frame.stack.push(Rc::new(NativeType::List(RefCell::new(vec))));
                 None
             },
 
@@ -305,7 +307,7 @@ impl VirtualMachine {
                 let iter = match *tos {
                     //TODO: is this clone right?
                     // Return a Iterator instead              vvv
-                    NativeType::List(ref vec) => NativeType::Iter(vec.clone()),
+                    NativeType::List(ref vec) => NativeType::Iter(vec.borrow().clone()),
                     _ => panic!("TypeError: object is not iterable")
                 };
                 curr_frame.stack.push(Rc::new(iter));
@@ -448,11 +450,9 @@ impl VirtualMachine {
                 let tos1 = curr_frame.stack.pop().unwrap();
                 let tos2 = curr_frame.stack.pop().unwrap();
                 match (tos1.deref(), tos.deref()) {
-                    /* TODO: support list assignment
-                    (&NativeType::List(mut refl), &NativeType::Int(index)) => {
-                        refl[index as usize] = (*tos2).clone();
+                    (&NativeType::List(ref refl), &NativeType::Int(index)) => {
+                        refl.borrow_mut()[index as usize] = (*tos2).clone();
                     },
-                    */
                     (&NativeType::Str(_), &NativeType::Int(_)) => {
                         // TODO: raise TypeError: 'str' object does not support item assignment
                         panic!("TypeError: 'str' object does not support item assignment")
@@ -486,7 +486,7 @@ impl VirtualMachine {
                     (&NativeType::List(ref l1), &NativeType::List(ref l2)) => {
                         let mut new_l = l2.clone();
                         // TODO: remove unnessary copy
-                        new_l.append(&mut l1.clone());
+                        new_l.borrow_mut().append(&mut l1.borrow().clone());
                         curr_frame.stack.push(Rc::new(NativeType::List(new_l)));
 
                     }
@@ -583,17 +583,17 @@ impl VirtualMachine {
                 debug!("tos: {:?}, tos1: {:?}", tos, tos1);
                 match (tos1.deref(), tos.deref()) {
                     (&NativeType::List(ref l), &NativeType::Int(ref index)) => {
-                        let pos_index = (index + l.len() as i32) % l.len() as i32;
-                        curr_frame.stack.push(Rc::new(l[pos_index as usize].clone()))
+                        let pos_index = (index + l.borrow().len() as i32) % l.borrow().len() as i32;
+                        curr_frame.stack.push(Rc::new(l.borrow()[pos_index as usize].clone()))
                     },
                     (&NativeType::List(ref l), &NativeType::Slice(ref opt_start, ref opt_stop, ref opt_step)) => {
                         let start = match opt_start {
-                            &Some(start) => ((start + l.len() as i32) % l.len() as i32) as usize,
+                            &Some(start) => ((start + l.borrow().len() as i32) % l.borrow().len() as i32) as usize,
                             &None => 0,
                         };
                         let stop = match opt_stop {
-                            &Some(stop) => ((stop + l.len() as i32) % l.len() as i32) as usize,
-                            &None => l.len() as usize,
+                            &Some(stop) => ((stop + l.borrow().len() as i32) % l.borrow().len() as i32) as usize,
+                            &None => l.borrow().len() as usize,
                         };
                         let step = match opt_step {
                             //Some(step) => step as usize,
@@ -601,7 +601,7 @@ impl VirtualMachine {
                             _ => unimplemented!(),
                         };
                         // TODO: we could potentially avoid this copy and use slice
-                        curr_frame.stack.push(Rc::new(NativeType::List(l[start..stop].to_vec())));
+                        curr_frame.stack.push(Rc::new(NativeType::List(RefCell::new(l.borrow()[start..stop].to_vec()))));
                     },
                     (&NativeType::Tuple(ref t), &NativeType::Int(ref index)) => curr_frame.stack.push(Rc::new(t[*index as usize].clone())),
                     (&NativeType::Str(ref s), &NativeType::Int(ref index)) => {
