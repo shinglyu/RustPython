@@ -307,6 +307,7 @@ impl VirtualMachine {
                 let iter = match *tos {
                     //TODO: is this clone right?
                     // Return a Iterator instead              vvv
+                    NativeType::Tuple(ref vec) => NativeType::Iter(vec.clone()),
                     NativeType::List(ref vec) => NativeType::Iter(vec.borrow().clone()),
                     _ => panic!("TypeError: object is not iterable")
                 };
