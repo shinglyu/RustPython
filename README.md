@@ -1,5 +1,8 @@
 RustPython
 ==============
+# This repository is now part of the [RustPython/RustPython](https://github.com/RustPython/RustPython) project. Please go to the [RustPython/RustPython](https://github.com/RustPython/RustPython) project to star or contribute!
+
+------------------------------
 
 A Python interpreter written in Rust
 
